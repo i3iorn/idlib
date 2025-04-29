@@ -1,0 +1,2 @@
+git+https://github.com/i3iorn/bwclient.git
+git+https://github.com/i3iorn/api_essentials.git
