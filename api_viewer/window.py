@@ -1,6 +1,6 @@
 from PyQt6.QtWidgets import QMainWindow, QVBoxLayout
 
-from api_viewer.central_widget import CentralWidget
+from src.central_widget import CentralWidget
 from constants import *
 
 

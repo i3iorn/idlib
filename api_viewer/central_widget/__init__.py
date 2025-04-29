@@ -1,9 +1,9 @@
 from PyQt6.QtWidgets import QWidget, QHBoxLayout
 
-from api_viewer.constants import NO_MARGIN
-from api_viewer.central_widget.config_widget import ConfigWidget
-from api_viewer.central_widget.request_widget import RequestWidget
-from api_viewer.central_widget.response_widget import ResponseWidget
+from src.constants import NO_MARGIN
+from src.central_widget.config_widget import ConfigWidget
+from src.central_widget.request_widget import RequestWidget
+from src.central_widget.response_widget import ResponseWidget
 
 
 class CentralWidget(QWidget):

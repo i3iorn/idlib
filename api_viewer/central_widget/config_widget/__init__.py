@@ -1,8 +1,8 @@
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QVBoxLayout, QComboBox, QLabel, QTextEdit, QHBoxLayout
 
-from api_viewer.central_widget.core import CentralChildWidget
-from api_viewer.constants import NO_MARGIN
+from src.central_widget.core import CentralChildWidget
+from src.constants import NO_MARGIN
 
 
 class ConfigWidget(CentralChildWidget):

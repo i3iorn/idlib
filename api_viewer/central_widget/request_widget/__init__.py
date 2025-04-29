@@ -1,7 +1,7 @@
 from PyQt6.QtCore import QStringListModel
 from PyQt6.QtWidgets import QListView
 
-from api_viewer.central_widget.core import CentralChildWidget
+from src.central_widget.core import CentralChildWidget
 
 
 class RequestWidget(CentralChildWidget):
