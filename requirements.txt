@@ -1,2 +1,5 @@
+PyYAML~=6.0.2
+requests~=2.32.3
+PyQt6~=6.9.0
 git+https://github.com/i3iorn/bwclient.git
 git+https://github.com/i3iorn/api_essentials.git
