@@ -15,6 +15,7 @@ from api_essentials.auth import OAuth2Auth, ClientCredentials
 class SpecRegistry:
     _instance = None
     _registry = {}
+    _hooks = {}
     _lock = Lock()
 
     def __new__(cls):
@@ -28,16 +29,22 @@ class SpecRegistry:
             self._initialized = True
             self._registry = {}
 
-    @classmethod
-    def register(cls, name, spec):
+    def register(self, name, spec):
         if not isinstance(spec, dict):
             raise ValueError("Spec must be a dictionary")
-        cls._registry[name] = spec
-        print(len(cls._registry))
+        with self._lock:
+            self._registry[name] = spec
 
-    @classmethod
-    def get(cls, key):
-        return cls._registry.get(key)
+    def unregister(self, name):
+        with self._lock:
+            if name in self._registry:
+                del self._registry[name]
+            else:
+                raise KeyError(f"Spec '{name}' not found in registry")
+
+    def get(self, key):
+        with self._lock:
+            return self._registry.get(key)
 
 
 class SpecAddress:
@@ -54,7 +61,7 @@ class SpecAddress:
 class Protocol(Enum):
     HTTP = "http://", requests.get, {"verify": False}, "text"
     HTTPS = "https://", requests.get, {"verify": False}, "text"
-    C = "C:\\", open, {"mode": "r", "encoding": "utf-8"}, "read"
+    FILE = "file://", open, {"encoding": "utf-8", "mode": "r"}, "read"
 
     @property
     def protocol(self):
@@ -82,8 +89,8 @@ class Protocol(Enum):
             return cls.HTTP
         elif spec_address.startswith(cls.HTTPS.protocol):
             return cls.HTTPS
-        elif spec_address.startswith(cls.C.protocol):
-            return cls.C
+        elif spec_address.startswith(cls.FILE.protocol):
+            return cls.FILE
         else:
             raise ValueError(f"Unsupported protocol in address: {spec_address}")
 
@@ -96,7 +103,7 @@ class SpecReader:
         self._read_method = self._protocol.read_method
 
     def read(self):
-        if self._protocol == Protocol.C:
+        if self._protocol == Protocol.FILE:
             # File read operation for C protocol
             with self._function(self._address._raw, **self._params) as file:
                 content = getattr(file, self._read_method)()
@@ -111,6 +118,7 @@ class SpecReader:
 
 
 def load_apis():
+    registry = SpecRegistry()
     with open("api_specs.ini", "r", encoding="utf-8") as spec_address_file:
         spec_addresses = spec_address_file.readlines()
 
@@ -123,10 +131,9 @@ def load_apis():
             spec = yaml.safe_load(spec_text)
         else:
             raise ValueError(f"Unsupported file format: {spec_address}")
-        SpecRegistry.register(name, spec)
+        registry.register(name, spec)
 
 
-my_api = APIFactory.from_openapi(SpecRegistry.get("decisioning"), auth=OAuth2Auth(r"https://login.bisnode.com/sandbox/v1/token.oauth2"), verify=False, host_prefix="sandbox-")
 
 # credentials = ClientCredentials(
 #     client_id="71a7c376-0f79-4fc5-9db9-6447d2097e21",
@@ -148,3 +155,6 @@ my_api = APIFactory.from_openapi(SpecRegistry.get("decisioning"), auth=OAuth2Aut
 
 if __name__ == "__main__":
     load_apis()
+    spec_registry = SpecRegistry()
+    spec = spec_registry.get("decisioning")
+    my_api = APIFactory.from_openapi(spec, auth=OAuth2Auth(r"https://login.bisnode.com/sandbox/v1/token.oauth2"), verify=False, host_prefix="sandbox-")
