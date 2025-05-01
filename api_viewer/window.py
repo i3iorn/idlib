@@ -1,7 +1,8 @@
-from PyQt6.QtWidgets import QMainWindow, QVBoxLayout
+from PyQt6.QtWidgets import QMainWindow
 
-from src.central_widget import CentralWidget
-from constants import *
+from api_viewer.api import load_apis
+from api_viewer.central_widget import CentralWidget
+from constants import STARTUP_WINDOW_X, STARTUP_WINDOW_Y, STARTUP_WINDOW_WIDTH, STARTUP_WINDOW_HEIGHT
 
 
 class MainWindow(QMainWindow):
@@ -12,8 +13,8 @@ class MainWindow(QMainWindow):
         self.setGeometry(STARTUP_WINDOW_X, STARTUP_WINDOW_Y, STARTUP_WINDOW_WIDTH, STARTUP_WINDOW_HEIGHT)
         self.setMinimumSize(STARTUP_WINDOW_WIDTH, STARTUP_WINDOW_HEIGHT)
 
-        self._setup_ui()
         self._load_api_data()
+        self._setup_ui()
 
     def _setup_ui(self):
         self._setup_menu()
@@ -24,7 +25,7 @@ class MainWindow(QMainWindow):
         # Load API data here
         # For example, you can load the API data from a file or an API endpoint
         # and then update the central widget with the loaded data.
-        pass
+        load_apis()
 
     def _setup_menu(self):
         # Create a menu bar
@@ -36,6 +37,13 @@ class MainWindow(QMainWindow):
         # Create actions for the file menu
         exit_action = file_menu.addAction("Exit")
         exit_action.triggered.connect(self.close)
+
+        # Create specification menu
+        spec_menu = menu_bar.addMenu("Specification")
+
+        # Create actions for the specification menu
+        load_action = spec_menu.addAction("Reload Specifications")
+        load_action.triggered.connect(self._load_api_data)
 
     def _setup_central_widget(self):
         central_widget = CentralWidget(self)
