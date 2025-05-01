@@ -1,9 +1,10 @@
-from PyQt6.QtWidgets import QWidget, QHBoxLayout
+from PyQt6.QtCore import Qt
+from PyQt6.QtWidgets import QWidget, QHBoxLayout, QSlider, QSplitter
 
-from src.constants import NO_MARGIN
-from src.central_widget.config_widget import ConfigWidget
-from src.central_widget.request_widget import RequestWidget
-from src.central_widget.response_widget import ResponseWidget
+from api_viewer.constants import NO_MARGIN
+from api_viewer.central_widget.config_widget import ConfigWidget
+from api_viewer.central_widget.request_widget import RequestWidget
+from api_viewer.central_widget.response_widget import ResponseWidget
 
 
 class CentralWidget(QWidget):
@@ -15,12 +16,20 @@ class CentralWidget(QWidget):
         # Set up the main layout (Vertical)
         main_layout = QHBoxLayout(self)
         main_layout.setContentsMargins(*NO_MARGIN)
-        self._setup_conf_section(main_layout)
-        self._setup_request_section(main_layout)
-        self._setup_response_section(main_layout)
+        splitter_widget = QSplitter(Qt.Orientation.Horizontal, self)
+        splitter_widget.setContentsMargins(*NO_MARGIN)
+        splitter_widget.setHandleWidth(5)
+        splitter_widget.setChildrenCollapsible(True)
+        splitter_widget.setStretchFactor(1,1)
+        splitter_widget.setStretchFactor(2,1)
+        splitter_widget.setStretchFactor(3,1)
+        main_layout.addWidget(splitter_widget)
 
-        # Add the horizontal layout to the main layout
-        main_layout.addLayout(main_layout)
+        self._setup_conf_section(splitter_widget)
+        self._setup_request_section(splitter_widget)
+        self._setup_response_section(splitter_widget)
+
+        self.setLayout(main_layout)
 
     def _setup_conf_section(self, main_layout):
         # Create the combo boxes and add them to the layout
@@ -31,9 +40,9 @@ class CentralWidget(QWidget):
         # Create two empty widgets
         self.request_widget = RequestWidget(self)
         # Add the empty widgets to the horizontal layout
-        main_layout.addWidget(self.request_widget, 25)  # 50% width
+        main_layout.addWidget(self.request_widget)
 
 
     def _setup_response_section(self, main_layout):
         self.empty_widget_2 = ResponseWidget()
-        main_layout.addWidget(self.empty_widget_2, 50)  # 25% width
+        main_layout.addWidget(self.empty_widget_2)

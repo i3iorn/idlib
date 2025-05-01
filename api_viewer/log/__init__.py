@@ -19,9 +19,10 @@ class ExpandedFormatter(logging.Formatter):
         extra = {}
 
         # Include fields passed in 'record.args' (these might include extra fields)
-        for key, value in record.args:
-            if isinstance(value, dict):  # If the value is a dictionary, we treat it as extra
-                extra.update(value)
+        for argument in record.args:
+            if isinstance(argument, dict):
+                for key, value in argument.items():
+                    extra[key] = value
 
         # If any fields are in 'extra' (added with prefix 'extra_'), include them in the log message
         for key, value in record.__dict__.items():
@@ -46,7 +47,17 @@ class SignalHandler(logging.Handler):
         self.signal_emitter = signal_emitter
 
     def emit(self, record):
-        msg = self.format(record)
+        try:
+            msg = self.format(record)
+        except Exception as e:
+            msg = f"Error formatting log message: {e}"
+            logging.error(msg)
+            # Fallback in case of failure
+            msg = record.getMessage()
+        # Emit the log message via the signal emitter
+        if not self.signal_emitter:
+            logging.error("Signal emitter is not set.")
+            return
         try:
             self.signal_emitter.log.emit(record.levelname, msg)
         except Exception as e:
@@ -82,20 +93,3 @@ def setup_logging(signal_emitter=None, level=logging.DEBUG) -> None:
 
     # Log a message to confirm setup
     logger.debug("Logging setup complete.")
-
-
-# Example usage
-if __name__ == "__main__":
-    # Example signal emitter (replace with actual implementation)
-    class MockEmitter:
-        def log(self, level, msg):
-            print(f"Signal emitted - Level: {level}, Message: {msg}")
-
-
-    # Set up the logging system with the signal emitter
-    setup_logging(signal_emitter=MockEmitter())
-
-    logger = logging.getLogger(__name__)
-    # Log message with extra fields
-    logger.info("This is an info message.", extra={"extra_user": "user123", "extra_action": "login"})
-    logger.error("This is an error message.", extra={"extra_user": "user123", "extra_error": "failure"})
