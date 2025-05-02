@@ -1,8 +1,13 @@
-from PyQt6.QtWidgets import QMainWindow
+import logging
+import sys
 
-from api_viewer.api import load_apis
+from PyQt6.QtWidgets import QMainWindow, QMessageBox
+
+from api_viewer.api import load_apis, load_clients
 from api_viewer.central_widget import CentralWidget
 from constants import STARTUP_WINDOW_X, STARTUP_WINDOW_Y, STARTUP_WINDOW_WIDTH, STARTUP_WINDOW_HEIGHT
+
+logger = logging.getLogger(__name__)
 
 
 class MainWindow(QMainWindow):
@@ -15,6 +20,7 @@ class MainWindow(QMainWindow):
 
         self._load_api_data()
         self._setup_ui()
+        sys.excepthook = self.custom_sys_exception_hook
 
     def _setup_ui(self):
         self._setup_menu()
@@ -22,9 +28,7 @@ class MainWindow(QMainWindow):
         self._setup_status_bar()
 
     def _load_api_data(self):
-        # Load API data here
-        # For example, you can load the API data from a file or an API endpoint
-        # and then update the central widget with the loaded data.
+        load_clients()
         load_apis()
 
     def _setup_menu(self):
@@ -53,3 +57,18 @@ class MainWindow(QMainWindow):
         # Create a status bar
         status_bar = self.statusBar()
         status_bar.showMessage("Ready")
+
+    def custom_sys_exception_hook(self, type, value, traceback):
+        """
+        Custom exception hook to handle uncaught exceptions.
+        """
+        # Log the exception or show a message box
+        logger.debug(f"Uncaught exception: {value}", exc_info=(type, value, traceback))
+        msg_box = QMessageBox(
+            QMessageBox.Icon.Critical,
+            "Uncaught Exception",
+            f"An uncaught exception occurred:\n{value}",
+            QMessageBox.StandardButton.Ok,
+            self
+        )
+        msg_box.exec()

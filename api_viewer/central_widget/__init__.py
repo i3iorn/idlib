@@ -1,3 +1,5 @@
+import logging
+
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QWidget, QHBoxLayout, QSlider, QSplitter
 
@@ -5,8 +7,12 @@ from api_viewer.constants import NO_MARGIN
 from api_viewer.central_widget.config_widget import ConfigWidget
 from api_viewer.central_widget.request_widget import RequestWidget
 from api_viewer.central_widget.response_widget import ResponseWidget
+from api_viewer.log.decorator import log_method_calls
+
+logger = logging.getLogger(__name__)
 
 
+@log_method_calls()
 class CentralWidget(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -20,14 +26,16 @@ class CentralWidget(QWidget):
         splitter_widget.setContentsMargins(*NO_MARGIN)
         splitter_widget.setHandleWidth(5)
         splitter_widget.setChildrenCollapsible(True)
-        splitter_widget.setStretchFactor(1,1)
-        splitter_widget.setStretchFactor(2,1)
-        splitter_widget.setStretchFactor(3,1)
+
         main_layout.addWidget(splitter_widget)
 
         self._setup_conf_section(splitter_widget)
         self._setup_request_section(splitter_widget)
         self._setup_response_section(splitter_widget)
+
+        splitter_widget.setStretchFactor(1,1)
+        splitter_widget.setStretchFactor(2,2)
+        splitter_widget.setStretchFactor(3,4)
 
         self.setLayout(main_layout)
 
@@ -42,7 +50,12 @@ class CentralWidget(QWidget):
         # Add the empty widgets to the horizontal layout
         main_layout.addWidget(self.request_widget)
 
-
     def _setup_response_section(self, main_layout):
         self.empty_widget_2 = ResponseWidget()
         main_layout.addWidget(self.empty_widget_2)
+
+    def keyPressEvent(self, a0):
+        if a0.key() == Qt.Key.Key_Escape:
+            self.parent().close()
+        else:
+            super().keyPressEvent(a0)

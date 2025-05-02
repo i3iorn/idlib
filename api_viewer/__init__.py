@@ -1,9 +1,15 @@
+import asyncio
 import sys
+from PyQt6.QtWidgets import QApplication
+from qasync import QEventLoop
+
+app = QApplication(sys.argv)
+loop = QEventLoop(app)
+asyncio.set_event_loop(loop)
 
 def launch_window():
-    from PyQt6.QtWidgets import QApplication
 
-    from api_viewer.log import setup_logging
+    from api_viewer.log.setup import setup_logging
     from api_viewer.emitter import SignalEmitter
     from api_viewer.window import MainWindow
 
@@ -18,8 +24,12 @@ def launch_window():
     application.setApplicationName(STARTUP_WINDOW_TITLE)
 
     application.setStyle("Fusion")
-    window = MainWindow(signal_emitter)
-    window.show()
+    main_window = MainWindow(signal_emitter)
+
+    with loop:
+        main_window.show()
+        loop.run_forever()
+
     sys.exit(application.exec())
 
 
