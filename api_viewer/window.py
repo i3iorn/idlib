@@ -1,9 +1,10 @@
 import logging
 import sys
 
-from PyQt6.QtWidgets import QMainWindow, QMessageBox
+from PyQt6.QtCore import QRunnable
+from PyQt6.QtWidgets import QMainWindow, QMessageBox, QApplication
 
-from api_viewer.api import load_apis, load_clients
+from api_viewer.emitter import signal_emitter
 from api_viewer.central_widget import CentralWidget
 from constants import STARTUP_WINDOW_X, STARTUP_WINDOW_Y, STARTUP_WINDOW_WIDTH, STARTUP_WINDOW_HEIGHT
 
@@ -15,21 +16,19 @@ class MainWindow(QMainWindow):
         super().__init__(parent)
         self.signal_emitter = signal_emitter
         self.setWindowTitle("API Viewer")
-        self.setGeometry(STARTUP_WINDOW_X, STARTUP_WINDOW_Y, STARTUP_WINDOW_WIDTH, STARTUP_WINDOW_HEIGHT)
-        self.setMinimumSize(STARTUP_WINDOW_WIDTH, STARTUP_WINDOW_HEIGHT)
+        height = min(STARTUP_WINDOW_HEIGHT, QApplication.primaryScreen().size().height() - 2*STARTUP_WINDOW_Y)
+        width = min(STARTUP_WINDOW_WIDTH, QApplication.primaryScreen().size().width() - 2*STARTUP_WINDOW_X)
 
-        self._load_api_data()
-        self._setup_ui()
+        self.setGeometry(STARTUP_WINDOW_X, STARTUP_WINDOW_Y, width, height)
+        self.setMinimumSize(width, height)
+
         sys.excepthook = self.custom_sys_exception_hook
+        self._setup_ui()
 
     def _setup_ui(self):
         self._setup_menu()
         self._setup_central_widget()
         self._setup_status_bar()
-
-    def _load_api_data(self):
-        load_clients()
-        load_apis()
 
     def _setup_menu(self):
         # Create a menu bar
@@ -47,7 +46,7 @@ class MainWindow(QMainWindow):
 
         # Create actions for the specification menu
         load_action = spec_menu.addAction("Reload Specifications")
-        load_action.triggered.connect(self._load_api_data)
+        load_action.triggered.connect(signal_emitter.reload_specifications.emit)
 
     def _setup_central_widget(self):
         central_widget = CentralWidget(self)

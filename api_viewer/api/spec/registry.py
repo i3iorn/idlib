@@ -3,6 +3,7 @@ from threading import Lock
 from copy import deepcopy
 from typing import Callable, Dict, Optional, List
 
+from api_viewer.emitter import signal_emitter
 from api_viewer.log.decorator import log_method_calls
 
 logger = logging.getLogger(__name__)
@@ -148,6 +149,8 @@ class SpecRegistry:
                 raise ValueError(f"Invalid spec name '{name}': must be a valid identifier")
             logger.debug(f"Registering spec '{name}'")
             self._registry[name] = spec
+
+        signal_emitter.api_available.emit(name)
 
     def unregister(self, name: str) -> None:
         """

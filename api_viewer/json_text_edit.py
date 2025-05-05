@@ -1,20 +1,29 @@
 import json
 
 from PyQt6.QtCore import QTimer, Qt, QMimeData, pyqtSignal
-from PyQt6.QtGui import QFocusEvent, QTextCursor, QTextCharFormat, QColor
+from PyQt6.QtGui import (
+    QFocusEvent, QTextCursor, QTextCharFormat, QColor
+)
 from PyQt6.QtWidgets import QTextEdit, QToolTip
+
+from api_viewer.json_highlighter import JsonHighlighter
 
 
 class JsonTextEdit(QTextEdit):
-    jsonValidityChanged = pyqtSignal(bool)
+    jsonValidityChanged = pyqtSignal(bool, str)
 
-    def __init__(self, parent=None, indent=4):
+    def __init__(self, parent=None, indent=4, read_only=False):
         super().__init__(parent)
+        self._textChangeDelay = 0
         self.indent = indent
         self.setAcceptRichText(False)
+        self.setReadOnly(read_only)
 
         self._last_valid = None
         self._last_text_validated = ""
+
+        # install the highlighter
+        self._highlighter = JsonHighlighter(self.document())
 
         self._json_timer = QTimer(self)
         self._json_timer.setSingleShot(True)
@@ -25,24 +34,17 @@ class JsonTextEdit(QTextEdit):
     def _on_text_changed(self):
         current_text = self.toPlainText()
         if current_text != self._last_text_validated:
-            self._json_timer.start(500)
+            self._json_timer.start(self._textChangeDelay)
 
     def keyPressEvent(self, event):
         key = event.key()
         cursor = self.textCursor()
         block_text = cursor.block().text()
-        pos_in_block = cursor.positionInBlock()
-
         pairs = {
-            ord('{'): '}',
-            ord('['): ']',
-            ord('('): ')',
-            ord('"'): '"',
+            ord('{'): '}', ord('['): ']', ord('('): ')', ord('"'): '"',
         }
-
         if key in pairs:
-            opening = chr(key)
-            closing = pairs[key]
+            opening, closing = chr(key), pairs[key]
             cursor.insertText(opening + cursor.selectedText() + closing)
             cursor.movePosition(QTextCursor.MoveOperation.Left)
             self.setTextCursor(cursor)
@@ -66,14 +68,14 @@ class JsonTextEdit(QTextEdit):
 
         try:
             json.loads(raw)
-            valid = True
+            valid, msg = True, ""
         except json.JSONDecodeError as e:
-            valid = False
+            valid, msg = False, e.msg
             self._show_json_error(e)
 
         if valid != self._last_valid:
             self._last_valid = valid
-            self.jsonValidityChanged.emit(valid)
+            self.jsonValidityChanged.emit(valid, msg)
 
         return valid
 
@@ -129,3 +131,9 @@ class JsonTextEdit(QTextEdit):
         rect = self.cursorRect(cursor)
         global_pos = self.viewport().mapToGlobal(rect.bottomRight())
         QToolTip.showText(global_pos, error.msg, self)
+
+    def setTextChangeDelay(self, delay: int):
+        self._textChangeDelay = delay
+
+    def textChangeDelay(self):
+        return self._textChangeDelay

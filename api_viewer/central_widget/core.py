@@ -1,15 +1,18 @@
 import logging
+import os
 
+import dotenv
 from PyQt6.QtWidgets import QWidget, QSizePolicy, QVBoxLayout
 
-from bwclient import get_bw_client
+from bitwarden_secrets_manager_python import BWS
 
 from api_viewer.api import SpecRegistry, ClientRegistry
 from api_viewer.api.request_handler import APIRequestHandler
 from api_viewer.constants import NO_MARGIN
-from api_viewer.emitter import SignalEmitter
+from api_viewer.emitter import signal_emitter
 from api_viewer.log.decorator import log_method_calls
 
+dotenv.load_dotenv()
 logger =  logging.getLogger(__name__)
 
 
@@ -21,8 +24,14 @@ class CentralChildWidget(QWidget):
 
         self.spec_registry = SpecRegistry()
         self.client_registry = ClientRegistry()
-        self.secrets_manager = get_bw_client()
-        self.signals = SignalEmitter()
+        self.secrets_manager = BWS(
+            bws_access_token=os.getenv("BWS_ACCESS_TOKEN"),
+            cache_duration=os.getenv("BWS_CACHE_DURATION", 600),
+            bws_path=os.getenv("BWS_PATH", "../bws.exe"),
+        )
+        logger.debug(f"Initialized secrets manager: {self.secrets_manager.__class__.__name__}")
+
+        self.signals = signal_emitter
 
         self.api_handler = APIRequestHandler(self.secrets_manager, self.signals)
 

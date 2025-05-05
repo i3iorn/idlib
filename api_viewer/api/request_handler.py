@@ -32,8 +32,7 @@ class APIRequestHandler:
             TRUST_UNDEFINED_PARAMETERS,
             auth_info=ClientCredentials(
                 client_id=client_spec.get("clientId"),
-                client_secret=self.secrets_manager.secrets()
-                    .get(client_spec.get("clientSecretKey")).data.value,
+                client_secret=self.secrets_manager.get_secret(client_spec.get("clientSecretKey")).get("value"),
                 scopes=client_spec.get("scopes", [])
             ),
             endpoint=my_api.get_endpoint(endpoint_path),

@@ -1,13 +1,16 @@
 import logging
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QThreadPool
 from PyQt6.QtWidgets import QWidget, QHBoxLayout, QSlider, QSplitter
 
+from api_viewer.api import load_apis, load_clients
 from api_viewer.constants import NO_MARGIN
 from api_viewer.central_widget.config_widget import ConfigWidget
 from api_viewer.central_widget.request_widget import RequestWidget
 from api_viewer.central_widget.response_widget import ResponseWidget
+from api_viewer.emitter import signal_emitter
 from api_viewer.log.decorator import log_method_calls
+from api_viewer.runner import WorkerThread
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +20,18 @@ class CentralWidget(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._setup_ui()
+        self._load_data()
+        signal_emitter.ui_loaded.emit()
+
+    def _load_data(self):
+        self.api_loader_thread = WorkerThread(
+            func=load_apis
+        )
+        QThreadPool.globalInstance().start(self.api_loader_thread)
+        self.client_loader_thread = WorkerThread(
+            func=load_clients
+        )
+        QThreadPool.globalInstance().start(self.client_loader_thread)
 
     def _setup_ui(self):
         # Set up the main layout (Vertical)

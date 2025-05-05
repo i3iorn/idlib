@@ -1,15 +1,27 @@
 import asyncio
 import json
 import logging
-from dataclasses import dataclass, field
-from typing import Dict, Iterable, Any, Optional
+from contextlib import contextmanager
+from typing import Dict, Any, Optional, Callable
 
 from qasync import asyncSlot
 from PyQt6.QtCore import Qt, QSettings
-from PyQt6.QtWidgets import QVBoxLayout, QComboBox, QLabel, QHBoxLayout, QPushButton, \
-    QMessageBox, QSplitter, QWidget, QCheckBox, QSizePolicy, QSpacerItem, QProgressBar
+from PyQt6.QtWidgets import (
+    QVBoxLayout,
+    QComboBox,
+    QLabel,
+    QSplitter,
+    QWidget,
+    QCheckBox,
+    QSizePolicy,
+    QSpacerItem,
+    QProgressBar,
+)
 
-from api_viewer.api.request_handler import APIRequestHandler
+from api_viewer.central_widget.config_widget.api_interface import ApiServiceInterface, ApiService
+from api_viewer.central_widget.config_widget.core import ControlKey, ConfigState, UIFactory, DynamicControlManager
+from api_viewer.central_widget.config_widget.settings import SettingsManager
+
 from api_viewer.central_widget.core import CentralChildWidget
 from api_viewer.constants import NO_MARGIN
 from api_viewer.json_text_edit import JsonTextEdit
@@ -17,280 +29,311 @@ from api_viewer.log.decorator import log_method_calls
 
 logger = logging.getLogger(__name__)
 
+from copy import deepcopy
+from functools import lru_cache
+from typing import Any, Dict, Optional, Union
 
-class WidgetCreator:
-    @classmethod
-    def create_widget(cls, widget_class, parent=None):
+JsonDict = Dict[str, Any]
+
+
+def _merge_schemas(base: JsonDict, override: JsonDict) -> JsonDict:
+    """
+    Deep-merge two schema dicts, combining properties and lists.
+    """
+    result = deepcopy(base)
+    for key, val in override.items():
+        if key in result and isinstance(result[key], dict) and isinstance(val, dict):
+            result[key] = _merge_schemas(result[key], val)
+        elif key in result and isinstance(result[key], list) and isinstance(val, list):
+            # combine lists uniquely
+            combined = result[key] + [v for v in val if v not in result[key]]
+            result[key] = combined
+        else:
+            result[key] = deepcopy(val)
+    return result
+
+
+class SchemaResolver:
+    """
+    Helper to extract and fully resolve JSON schemas (including internal $refs and allOf)
+    from an OpenAPI spec loaded into Python dicts.
+    """
+    def __init__(self, api_spec: JsonDict) -> None:
+        self.api_spec = api_spec
+
+    def get_post_schema(self, endpoint_spec: JsonDict) -> Optional[JsonDict]:
+        try:
+            raw = (
+                endpoint_spec["post"]["requestBody"]["content"]
+                ["application/json"]["schema"]
+            )
+        except KeyError:
+            return None
+
+        schema_copy = deepcopy(raw)
+        return self._resolve_refs(schema_copy)
+
+    def get_component_schema(self, component_name: str) -> Optional[JsonDict]:
+        if not component_name:
+            return None
+        components = self.api_spec.get("components", {}).get("schemas", {})
+        if component_name in components:
+            return deepcopy(components[component_name])
+        for name, schema in components.items():
+            if name.endswith(component_name):
+                return deepcopy(schema)
+        return None
+
+    def _resolve_refs(self, node: Any) -> Any:
         """
-        Create a widget of the specified class.
+        Recursively resolve $ref and allOf in the node.
         """
-        widget = widget_class(parent)
-        widget.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        return widget
+        # resolve lists
+        if isinstance(node, list):
+            return [self._resolve_refs(item) for item in node]
 
-    @classmethod
-    def created_labeled_widget(cls, widget_class, label_text: str, layout: QVBoxLayout):
-        """
-        Create a labeled widget of the specified class.
-        """
-        h_layout = QHBoxLayout()
-        h_layout.setContentsMargins(*NO_MARGIN)
+        # resolve dicts
+        if isinstance(node, dict):
+            # handle allOf merging
+            if "allOf" in node and isinstance(node["allOf"], list):
+                merged: JsonDict = {}
+                for subschema in node.pop("allOf"):
+                    resolved = self._resolve_refs(subschema)
+                    if isinstance(resolved, dict):
+                        merged = _merge_schemas(merged, resolved)
+                # merge remaining keys in node
+                merged = _merge_schemas(merged, node)
+                return self._resolve_refs(merged)
 
-        label = QLabel(label_text)
-        widget = cls.create_widget(widget_class)
+            # handle direct $ref
+            if "$ref" in node and isinstance(node["$ref"], str):
+                ref = node["$ref"]
+                if ref.startswith("#/components/schemas/"):
+                    name = ref.split("/")[-1]
+                    comp = self._get_cached_component(name)
+                    return deepcopy(comp) if comp is not None else {}
+                return {}
 
-        h_layout.addWidget(label, 1)
-        h_layout.addWidget(widget, 3)
-        layout.addLayout(h_layout)
+            # resolve other keys
+            result: JsonDict = {}
+            for key, val in node.items():
+                result[key] = self._resolve_refs(val)
+            return result
 
-        return widget
+        # primitives
+        return node
 
-    @classmethod
-    def create_labeled_combobox(cls, label_text: str, layout: QVBoxLayout) -> QComboBox:
-        """
-        Create a labeled combo box.
-        """
-        return cls.created_labeled_widget(QComboBox, label_text, layout)
-
-    @classmethod
-    def create_labeled_checkbox(cls, label_text: str, layout: QVBoxLayout) -> QCheckBox:
-        """
-        Create a labeled checkbox.
-        """
-        return cls.created_labeled_widget(QCheckBox, label_text, layout)
-
-
-
-dynamic_layout_key = Qt.ItemDataRole.UserRole + 1
-
-@dataclass
-class ConfigState:
-    api_spec: Any = None
-    endpoint_path: str = ""
-    client_spec: Any = None
-    specific: Dict[str, Any] = field(default_factory=dict)
-    prodtest: bool = False
-    body: Dict[str, Any] = field(default_factory=dict)
+    @lru_cache(maxsize=None)
+    def _get_cached_component(self, component_name: str) -> Optional[JsonDict]:
+        raw = self.get_component_schema(component_name)
+        return self._resolve_refs(raw) if raw is not None else None
 
 
-class DynamicControlManager:
-    def __init__(self, layout: QVBoxLayout):
-        self.layout = layout
-        self.controls: Dict[str, QWidget] = {}
-
-    def add(self, key: str, widget: QWidget):
-        self.clear(key)
-        self.controls[key] = widget
-        self.layout.addWidget(widget)
-
-    def clear(self, key: str):
-        if key in self.controls:
-            w = self.controls.pop(key)
-            self.layout.removeWidget(w)
-            w.deleteLater()
-
-    def clear_all(self):
-        for key in list(self.controls.keys()):
-            self.clear(key)
 
 
 @log_method_calls()
 class ConfigWidget(CentralChildWidget):
-    def __init__(self, parent=None):
-        self.dynamic_manager: Optional[DynamicControlManager] = None
-        self.settings = QSettings("ApiViewer", "ConfigWidget")
+    def __init__(self, parent=None, settings: Optional[QSettings] = None, api_service: Optional[
+        ApiServiceInterface] = None):
+        self._settings = settings or QSettings("ApiViewer", "ConfigWidget")
+        self.settings = SettingsManager(self._settings)
         self.state = ConfigState()
+        self.dynamic_manager: DynamicControlManager
+        self.current_task: Optional[asyncio.Task] = None
         super().__init__(parent)
-        self.current_request_task: Optional[asyncio.Task] = None
+        self.api_service = api_service or ApiService(self.api_handler)
 
-    def _setup_ui(self):
-        self.control_splitter = QSplitter(Qt.Orientation.Vertical)
-        self.control_splitter.addWidget(self._build_controls_panel())
-        self.control_splitter.addWidget(self._build_body_panel())
-        self.layout().addWidget(self.control_splitter)
+    def _setup_ui(self) -> None:
+        self._init_layout()
+        self._connect_signals()
+        self._load_settings()
 
-    def _build_controls_panel(self) -> QWidget:
-        w = QWidget()
-        layout = QVBoxLayout(w)
+    def _init_layout(self) -> None:
+        self.splitter = QSplitter(Qt.Orientation.Vertical)
+        self.splitter.addWidget(self._make_control_panel())
+        self.splitter.addWidget(self._make_body_panel())
+        self.layout().addWidget(self.splitter)
+
+    def _make_control_panel(self) -> QWidget:
+        panel = QWidget()
+        layout = QVBoxLayout(panel)
         layout.setContentsMargins(*NO_MARGIN)
         self.dynamic_manager = DynamicControlManager(layout)
-        self._add_generic_api_controls(layout)
-        self._prodtest_checkbox = QCheckBox("Prodtest")
-        layout.addWidget(self._prodtest_checkbox)
-        layout.addItem(QSpacerItem(20, 40, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding))
-        return w
+        self.generic_controls: Dict[ControlKey, QComboBox] = {
+            key: UIFactory.combo(key.name.title(), layout) for key in ControlKey
+        }
+        self.prodtest_checkbox = QCheckBox("Prodtest")
+        layout.addWidget(self.prodtest_checkbox)
+        layout.addItem(QSpacerItem(0, 0, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding))
+        return panel
 
-    def _add_generic_api_controls(self, layout: QVBoxLayout):
-        self.generic_api_controls: Dict[str, QComboBox] = {}
-        for label in ["API", "Endpoint", "Client"]:
-            cb = QComboBox()
-            cb.setInsertPolicy(QComboBox.InsertPolicy.InsertAlphabetically)
-            cb.setDuplicatesEnabled(False)
-            cb.setMaxVisibleItems(10)
-            cb.setMinimumContentsLength(20)
-            self.generic_api_controls[label.lower()] = cb
-            h = QHBoxLayout()
-            h.setContentsMargins(*NO_MARGIN)
-            h.addWidget(QLabel(f"{label}:"), 1)
-            h.addWidget(cb, 3)
-            layout.addLayout(h)
-
-    def _build_body_panel(self) -> QWidget:
-        w = QWidget()
-        layout = QVBoxLayout(w)
-        layout.setContentsMargins(*NO_MARGIN)
-        body_widget = QWidget()
-        body_layout = QVBoxLayout(body_widget)
-        body_layout.setContentsMargins(*NO_MARGIN)
-        body_layout.addWidget(QLabel("Body:"), alignment=Qt.AlignmentFlag.AlignTop)
-
-        self.text_edit = JsonTextEdit()
-        self.text_edit.setFixedHeight(150)
-        body_layout.addWidget(self.text_edit)
-
-        # Progress and error
-        self.progress = QProgressBar()
-        self.progress.setVisible(False)
-        body_layout.addWidget(self.progress)
-        self.error_label = QLabel()
-        self.error_label.setStyleSheet("color: red")
-        self.error_label.setVisible(False)
-        body_layout.addWidget(self.error_label)
-
-        # Send button
-        self.send_button = QPushButton("Send request")
-        self.send_button.setFixedHeight(30)
-        body_layout.addWidget(self.send_button)
-
-        self.control_splitter.addWidget(body_widget)
-        self.control_splitter.setStretchFactor(0, 1)
-        self.control_splitter.setStretchFactor(1, 2)
-        self.layout().addWidget(self.control_splitter)
-
-        # Populate API combobox
-        for name, spec in self.spec_registry.all().items():
-            self.generic_api_controls["api"].addItem(name, spec)
-        self.generic_api_controls["api"].setCurrentIndex(0)
-        self.generic_api_controls["api"].setEnabled(True)
+    def _load_apis(self, event) -> None:
+        self.generic_controls[ControlKey.API].clear()
+        for api, spec in self.spec_registry.all().items():
+            self.generic_controls[ControlKey.API].addItem(api, spec)
+        self.generic_controls[ControlKey.API].setCurrentIndex(0)
         self._on_api_change(0)
 
-        return w
+    def _make_body_panel(self) -> QWidget:
+        panel = QWidget()
+        layout = QVBoxLayout(panel)
+        layout.setContentsMargins(*NO_MARGIN)
+        layout.addWidget(QLabel("Body:"), alignment=Qt.AlignmentFlag.AlignTop)
+        self.text_edit = JsonTextEdit()
+        self.text_edit.setTextChangeDelay(500)
+        layout.addWidget(self.text_edit)
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setVisible(False)
+        layout.addWidget(self.progress_bar)
+        self.error_label = QLabel()
+        self.error_label.setVisible(False)
+        self.error_label.setStyleSheet("color: red")
+        layout.addWidget(self.error_label)
+        self.send_button = UIFactory.button("Send request")
+        layout.addWidget(self.send_button)
+        return panel
 
-    def _connect_signals(self):
-        self.generic_api_controls["api"].currentIndexChanged.connect(self._on_api_change)
-        self.generic_api_controls["endpoint"].currentIndexChanged.connect(self._on_endpoint_change)
-        self.generic_api_controls["client"].currentIndexChanged.connect(self._on_client_change)
-        self._prodtest_checkbox.stateChanged.connect(self._on_prodtest_changed)
+    def _connect_signals(self) -> None:
+        self.signals.api_available.connect(self._load_apis)
+        self.generic_controls[ControlKey.API].activated.connect(self._on_api_change)
+        self.generic_controls[ControlKey.ENDPOINT].activated.connect(self._on_endpoint_change)
+        self.generic_controls[ControlKey.CLIENT].activated.connect(self._on_client_change)
+        self.prodtest_checkbox.stateChanged.connect(
+            lambda s: setattr(self.state, 'prodtest', s == Qt.Checked)
+        )
+        self.text_edit.jsonValidityChanged.connect(self._on_json_validity)
+        self.text_edit.textChanged.connect(self._on_body_edit)
+        self.send_button.clicked.connect(self._on_send)
 
-        self.text_edit.jsonValidityChanged.connect(self._on_json_validity_changed)
-        self.text_edit.textChanged.connect(self._on_body_text_changed)
+    def _load_settings(self) -> None:
+        idx = self.settings.load_index(ControlKey.API)
+        self.generic_controls[ControlKey.API].setCurrentIndex(idx)
+        self.text_edit.setPlainText(self.settings.load_text("bodyText"))
 
-        self.send_button.clicked.connect(self._on_send_request)
-
-    def _load_settings(self):
-        logger.debug("Loading settings")
-        idx = self.settings.value("apiIndex", 0, int)
-        logger.debug(f"API index: {idx}")
-        self.generic_api_controls["api"].setCurrentIndex(idx)
-        logger.debug(f"API name: {self.generic_api_controls['api'].itemText(idx)}")
-        # self.text_edit.setPlainText(self.settings.value("bodyText", ""))
-        logger.debug(f"Body text: {self.text_edit.toPlainText()}")
-
-    def _save_settings(self):
-        self.settings.setValue("apiIndex", self.generic_api_controls["api"].currentIndex())
-        self.settings.setValue("bodyText", self.text_edit.toPlainText())
+    def _save_settings(self) -> None:
+        self.settings.save_index(ControlKey.API, self.generic_controls[ControlKey.API].currentIndex())
+        self.settings.save_text("bodyText", self.text_edit.toPlainText())
 
     def _on_api_change(self, index: int) -> None:
         self._save_settings()
-        spec = self.generic_api_controls["api"].itemData(index)
+        spec = self.generic_controls[ControlKey.API].itemData(index)
         self.state.api_spec = spec
-        # reset downstream
-        for key in ("endpoint", "client"): self.generic_api_controls[key].clear()
+        self._reset_generic_controls(ControlKey.ENDPOINT, ControlKey.CLIENT)
         self.dynamic_manager.clear_all()
         self.error_label.setVisible(False)
 
-        paths = spec.get("paths", {})
-        for path, p_spec in paths.items():
-            self.generic_api_controls["endpoint"].addItem(path, p_spec)
-        for name, c_spec in self.client_registry.all().items():
-            self.generic_api_controls["client"].addItem(name, c_spec)
+        if spec is not None:
+            self._populate(self.generic_controls[ControlKey.ENDPOINT], spec.get("paths", {}))
 
-    def _on_endpoint_change(self, index: int) -> None:
-        self.state.endpoint_path = self.generic_api_controls["endpoint"].currentText()
+        if len(self.client_registry.all()) > 0:
+            self._populate(self.generic_controls[ControlKey.CLIENT], self.client_registry.all())
 
-    def _on_client_change(self, index: int) -> None:
+    def _on_endpoint_change(self, _: int) -> None:
+        self.state.endpoint_path = self.generic_controls[ControlKey.ENDPOINT].currentText()
+        endpoint_spec = self.generic_controls[ControlKey.ENDPOINT].currentData()
+        required_parameters = SchemaResolver(self.generic_controls[ControlKey.API].currentData()).get_post_schema(endpoint_spec)
+        if required_parameters:
+            missing = set(required_parameters.get("required")) - set(self.dynamic_manager.keys())
+            # Create a body that contains all required parameters
+            body = {}
+            for param in missing:
+                body[param] = ""
+
+            self.text_edit.setPlainText(json.dumps(body, indent=2))
+
+    def _on_client_change(self, _: int) -> None:
         self.dynamic_manager.clear_all()
-        self.state.client_spec = self.generic_api_controls["client"].itemData(index)
-        if self.generic_api_controls["api"].currentText() == "RGS_Decisioning":
-            rules = self.state.client_spec.get("rulesetKeys", [])
-            if rules:
-                cb = QComboBox()
-                for r in rules:
-                    text = f"{r['country']}_{r['channel']}_{r['key']}"
-                    cb.addItem(text, r)
-                self.dynamic_manager.add("rulesetKey", cb)
+        spec = self.generic_controls[ControlKey.CLIENT].currentData()
+        self.state.client_spec = spec
+        if handler := self._dynamic_handler_map.get(self.generic_controls[ControlKey.API].currentText()):
+            handler(spec)
 
-    def _on_prodtest_changed(self, state: int) -> None:
-        self.state.prodtest = (state == Qt.CheckState.Checked)
+    @property
+    def _dynamic_handler_map(self) -> Dict[str, Callable[[Any], None]]:
+        return {"RGS_Decisioning": self._add_ruleset_control}
 
-    def _on_json_validity_changed(self, is_valid: bool) -> None:
-        self.send_button.setEnabled(is_valid)
-        color = "white" if is_valid else "#ffeaea"
-        self.text_edit.setStyleSheet(f"background-color: {color};")
+    def _add_ruleset_control(self, spec: Any) -> None:
+        combo = QComboBox()
+        if spec is not None:
+            for rule in spec.get("rulesetKeys", []):
+                combo.addItem(f"{rule['country']}_{rule['channel']}_{rule['key']}", rule)
+        self.dynamic_manager.add("rulesetKey", combo)
 
-    def _on_body_text_changed(self) -> None:
-        if self.current_request_task and not self.current_request_task.done():
-            self.current_request_task.cancel()
+    def _reset_generic_controls(self, *keys: ControlKey) -> None:
+        for key in keys:
+            self.generic_controls[key].clear()
+
+    def _populate(self, combo: QComboBox, items: Any) -> None:
+        if isinstance(items, dict):
+            iter_items = items.items()
+        else:
+            iter_items = ((getattr(item, 'name', str(item)), item) for item in items)
+        for name, item in iter_items:
+            combo.addItem(name, item)
+
+    def _on_json_validity(self, valid: bool, msg: str) -> None:
+        self.send_button.setEnabled(valid)
+        if not valid:
+            self.error_label.setVisible(True)
+            self.error_label.setText("Invalid JSON format.")
+        else:
+            self.error_label.setVisible(False)
+            self.error_label.setText("")
+
+    def _on_body_edit(self) -> None:
+        if self.current_task and not self.current_task.done():
+            self.current_task.cancel()
             self.error_label.setVisible(True)
             self.error_label.setText("Request canceled due to edit.")
 
     @asyncSlot()
-    async def _on_send_request(self) -> None:
-        if self.current_request_task and not self.current_request_task.done():
+    async def _on_send(self) -> None:
+        if self.current_task and not self.current_task.done():
             return
+        with self._request_context():
+            self.current_task = asyncio.create_task(self._execute_request())
 
+    @contextmanager
+    def _request_context(self):
         self.error_label.setVisible(False)
-        self.progress.setVisible(True)
-        self.progress.setRange(0, 0)
-        self._set_controls_enabled(False)
-
-        self.current_request_task = asyncio.create_task(self._send_request_task())
-
-    async def _send_request_task(self) -> None:
+        self.progress_bar.setVisible(True)
+        self.progress_bar.setRange(0, 0)
+        self._set_all_enabled(False)
         try:
-            body = self._gather_body()
+            yield
+        finally:
+            # cleanup handled in _execute_request
+            pass
+
+    async def _execute_request(self) -> None:
+        try:
+            payload = self._gather_body()
             if self.state.prodtest:
-                path = "/prodtest/" + self.state.endpoint_path.lstrip("/")
+                path = f"{'/prodtest/'}{self.state.endpoint_path.lstrip('/')}"
             else:
                 path = self.state.endpoint_path
-            await self.api_handler.call(
-                self.state.api_spec, path, self.state.client_spec, body
-            )
-        except Exception as e:
+
+            await self.api_service.call_api(self.state.api_spec, path, self.state.client_spec, payload)
+        except Exception as exc:
             logger.exception("Request failed")
             self.error_label.setVisible(True)
-            self.error_label.setText(f"Error: {e}")
+            self.error_label.setText(f"Error: {exc}")
         finally:
-            self.progress.setVisible(False)
-            self._set_controls_enabled(True)
+            self.progress_bar.setVisible(False)
+            self._set_all_enabled(True)
 
     def _gather_body(self) -> Dict[str, Any]:
-        data: Dict[str, Any] = {}
-        # specific controls
-        for key, w in self.dynamic_manager.controls.items():
-            if isinstance(w, QComboBox):
-                data[key] = w.currentData()
-        # JSON body
-        raw = self.text_edit.toPlainText()
-        if raw.strip():
-            data.update(json.loads(raw))
-        return data
+        body = {key: ctrl.currentData() for key, ctrl in self.dynamic_manager.controls.items()}
+        raw = self.text_edit.toPlainText().strip()
+        if raw:
+            body.update(json.loads(raw))
+        return body
 
-    def _set_controls_enabled(self, enable: bool) -> None:
-        for w in self.generic_api_controls.values():
-            w.setEnabled(enable)
-        self._prodtest_checkbox.setEnabled(enable)
-        for w in self.dynamic_manager.controls.values():
-            w.setEnabled(enable)
-        self.text_edit.setEnabled(enable)
-        self.send_button.setEnabled(enable)
+    def _set_all_enabled(self, enabled: bool) -> None:
+        for combo in self.generic_controls.values():
+            combo.setEnabled(enabled)
+        self.prodtest_checkbox.setEnabled(enabled)
+        for ctrl in self.dynamic_manager.controls.values():
+            ctrl.setEnabled(enabled)
+        self.text_edit.setEnabled(enabled)
+        self.send_button.setEnabled(enabled)

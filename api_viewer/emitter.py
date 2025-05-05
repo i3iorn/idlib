@@ -1,44 +1,30 @@
 from PyQt6.QtCore import pyqtSignal, QObject
 
+from api_viewer.worker_result import WorkerResult
+
 
 class SignalEmitter(QObject):
     """
-    A class that emits signals for various events.
+    Emitter of application-wide signals.  Just a plain QObject subclass.
     """
 
-    # Signal for updating the status bar message (message, timeout)
-    status_bar_message  = pyqtSignal(str, int)
+    status_bar_message    = pyqtSignal(str, int)
+    error                 = pyqtSignal(str, str, str)
+    request               = pyqtSignal(str)
+    response              = pyqtSignal(str)
+    theme_changed         = pyqtSignal(str, str)
+    log                   = pyqtSignal(str, str)
+    api_available         = pyqtSignal(str)
+    request_body_changed  = pyqtSignal(str)
+    reload_specifications = pyqtSignal()
+    ui_loaded             = pyqtSignal()
 
-    # Signal for when an error occurs ( exeption class, error message , json formatted extra data)
-    error               = pyqtSignal(str, str, str)
+    job_started           = pyqtSignal(str)
+    job_finished          = pyqtSignal(str)
+    job_result            = pyqtSignal(str, WorkerResult)
+    job_progress          = pyqtSignal(str, int)
+    job_error             = pyqtSignal(str, tuple)
 
-    # Signal for when a request is made (http formatted request)
-    request             = pyqtSignal(str)
 
-    # Signal for when a response is received (http formatted response)
-    response            = pyqtSignal(str)
-
-    # Signal for theme change (theme name, full stylesheet)
-    theme_changed       = pyqtSignal(str, str)
-
-    # Log signal (log level, log message)
-    log                 = pyqtSignal(str, str)
-
-    # Signal for when an api is made available ( api name )
-    api_available       = pyqtSignal(str)
-
-    # Signal for when the request body is changed (valid json or not)
-    request_body_changed = pyqtSignal(str)
-
-    _instance = None
-
-    def __new__(cls, *args, **kwargs):
-        if not cls._instance:
-            cls._instance = super(SignalEmitter, cls).__new__(cls)
-            cls._initialize = False
-        return cls._instance
-
-    def __init__(self):
-        if not self._initialize:
-            super().__init__()
-            self._initialize = True
+# the one and only global instance:
+signal_emitter = SignalEmitter()

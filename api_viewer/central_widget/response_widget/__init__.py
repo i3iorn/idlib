@@ -6,6 +6,7 @@ from PyQt6.QtWidgets import (
 )
 
 from api_viewer.central_widget.core import CentralChildWidget
+from api_viewer.json_text_edit import JsonTextEdit
 from api_viewer.log.decorator import log_method_calls
 
 
@@ -23,7 +24,7 @@ class ResponseWidget(CentralChildWidget):
         self.tab_widget.addTab(self.raw_view, "Raw")
 
         # Pretty tab
-        self.pretty_view = QPlainTextEdit()
+        self.pretty_view = JsonTextEdit(read_only=True)
         self.pretty_view.setReadOnly(True)
         self.tab_widget.addTab(self.pretty_view, "Pretty")
 
@@ -34,6 +35,9 @@ class ResponseWidget(CentralChildWidget):
         self.paths_view.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.paths_view.horizontalHeader().setStretchLastSection(True)
         self.tab_widget.addTab(self.paths_view, "Paths")
+
+        # Set default tab
+        self.tab_widget.setCurrentIndex(1)
 
     def _connect_signals(self):
         # Connect signals to methods
