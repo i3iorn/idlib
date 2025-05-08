@@ -177,5 +177,27 @@
     "notes": "Carnegie",
     "internalClient": false,
     "scopes": ["credit_data_companies"]
+  },
+  {
+    "clientId": "287624",
+    "customerCode": "TLG4",
+    "clientSecretKey": "3ce0d23b-3ac9-4f1c-8fed-b2d4009bafa6",
+    "associatedServer": "https://login.bisnode.com/as/token.oauth2",
+    "environment": "production",
+    "internalClient": false,
+    "scopes": ["rgs-decision"],
+    "notes": "HLL",
+    "rulesetKeys": [
+      {
+        "key": "1-54b7-bba8-c693",
+        "country": "SE",
+        "channel": "b2b"
+      },
+      {
+        "key": "1-5eb7-d6b6-54bb",
+        "country": "SE",
+        "channel": "b2c"
+      }
+    ]
   }
 ]

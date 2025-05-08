@@ -46,7 +46,7 @@ class MainWindow(QMainWindow):
 
         # Create actions for the specification menu
         load_action = spec_menu.addAction("Reload Specifications")
-        load_action.triggered.connect(signal_emitter.reload_specifications.emit)
+        load_action.triggered.connect(signal_emitter.reloadSpecifications.emit)
 
     def _setup_central_widget(self):
         central_widget = CentralWidget(self)

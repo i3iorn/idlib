@@ -84,6 +84,39 @@ class ClientRegistry:
             self._registry: Dict[str, dict] = {}
             self._lock = Lock()
 
+        self.register(
+            "Sandbox",
+            {
+                "clientId": "71a7c376-0f79-4fc5-9db9-6447d2097e21",
+                "clientSecret": "Ut0dzd8PWzZpxorrFJ8l0d8D4ZcbLNHsJVncvjc26v9V7A4LlLkCAgF11jsJdOxM",
+                "associatedServer": "https://login.bisnode.com/sandbox/v1/token.oauth2",
+                "environment": "sandbox",
+                "customerCode": "",
+                "scopes": ["credit_data_companies", "credit_data_persons", "rgs-decision", "rgs-decision-test", "credit_data_companies"],
+                "notes": "Björn Schrammel",
+                "internalClient": True,
+                "rulesetKeys": [
+                    {
+                        "key": "1-d758-0bd3-3464",
+                        "country": "SE",
+                        "channel": "b2b",
+                        "notes": "Complex ruleset key for company screening"
+                    },
+                    {
+                        "key": "1-d019-1c35-f652",
+                        "country": "SE",
+                        "channel": "b2b",
+                        "notes": "Simple ruleset key for company screening"
+                    },
+                    {
+                        "key": "1-adbf-552e-31d3",
+                        "country": "SE",
+                        "channel": "b2c"
+                    }
+                ]
+            }
+        )
+
     def all(self) -> Dict[str, dict]:
         """
         Return a shallow copy of all registered specs.
@@ -98,6 +131,38 @@ class ClientRegistry:
             raise RuntimeError("ClientRegistry not initialized")
         with self._lock:
             return self._registry.copy()
+
+    def internal_clients(self) -> Dict[str, dict]:
+        """
+        Return a shallow copy of all registered internal clients.
+        This method is thread-safe and returns a copy of the registry
+        to prevent external modifications.
+        Returns:
+            Dict[str, dict]: A shallow copy of all registered internal clients.
+        Raises:
+            RuntimeError: If the registry is not initialized.
+        """
+        return {
+            name: client
+            for name, client in self.all().items()
+            if client.get("internalClient", False)
+        }
+
+    def external_clients(self) -> Dict[str, dict]:
+        """
+        Return a shallow copy of all registered external clients.
+        This method is thread-safe and returns a copy of the registry
+        to prevent external modifications.
+        Returns:
+            Dict[str, dict]: A shallow copy of all registered external clients.
+        Raises:
+            RuntimeError: If the registry is not initialized.
+        """
+        return {
+            name: client
+            for name, client in self.all().items()
+            if not client.get("internalClient", False)
+        }
 
     def register(self, name: str, client: dict) -> None:
         """

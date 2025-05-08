@@ -1,11 +1,12 @@
 import json
 from PyQt6.QtCore import QStringListModel, Qt
+from PyQt6.QtGui import QStandardItemModel, QStandardItem
 from PyQt6.QtWidgets import (
     QTabWidget, QListView, QPlainTextEdit, QTableWidget, QTableWidgetItem,
-    QVBoxLayout, QWidget
+    QVBoxLayout, QWidget, QSlider, QHBoxLayout, QLabel, QTreeView, QSpacerItem, QSizePolicy
 )
 
-from api_viewer.central_widget.core import CentralChildWidget
+from api_viewer.central_widget.core import CentralChildWidget, RequestResponseViewTabs
 from api_viewer.json_text_edit import JsonTextEdit
 from api_viewer.log.decorator import log_method_calls
 
@@ -13,68 +14,64 @@ from api_viewer.log.decorator import log_method_calls
 @log_method_calls()
 class ResponseWidget(CentralChildWidget):
     def _setup_ui(self):
+        # Request time
+        self._setup_request_time_widget()
+        self._setup_tabs()
+
+    def _setup_request_time_widget(self):
+        layout = QHBoxLayout()
+        label = QLabel("Request time: ")
+        self.request_time_value = QLabel("0")
+        self.request_time_unit = QLabel("ms")
+
+        layout.addStretch()
+        layout.addWidget(label)
+        layout.addWidget(self.request_time_value)
+        layout.addWidget(self.request_time_unit)
+        layout.addItem(
+            QSpacerItem(20, 0, QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        )
+        self.layout().addLayout(layout)
+
+    def _setup_tabs(self):
         # Tabbed viewer
-        self.tab_widget = QTabWidget()
+        self.tab_widget = RequestResponseViewTabs(self, "Response:")
         self.layout().addWidget(self.tab_widget)
-
-        # Raw tab
-        self.raw_model = QStringListModel(self)
-        self.raw_view = QListView()
-        self.raw_view.setModel(self.raw_model)
-        self.tab_widget.addTab(self.raw_view, "Raw")
-
-        # Pretty tab
-        self.pretty_view = JsonTextEdit(read_only=True)
-        self.pretty_view.setReadOnly(True)
-        self.tab_widget.addTab(self.pretty_view, "Pretty")
-
-        # Paths tab
-        self.paths_view = QTableWidget()
-        self.paths_view.setColumnCount(2)
-        self.paths_view.setHorizontalHeaderLabels(["Path", "Value"])
-        self.paths_view.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        self.paths_view.horizontalHeader().setStretchLastSection(True)
-        self.tab_widget.addTab(self.paths_view, "Paths")
-
-        # Set default tab
-        self.tab_widget.setCurrentIndex(1)
 
     def _connect_signals(self):
         # Connect signals to methods
-        self.signals.response.connect(self._update_response)
+        self.signals.loadRequestId.connect(self._load_request_id)
 
-    def _update_response(self, response: str) -> None:
-        self.raw_model.setStringList(response.splitlines())
+    def _load_request_id(self, req_id: int) -> None:
+        """Load the request with the given ID."""
+        # Load the request and response from the database
+        request = self.storage.fetch_request(req_id)
+        print(request)
+        self.set_request_time(request.get("response_time"))
 
-        try:
-            json_data = json.loads(response.splitlines()[-1])
-        except (json.JSONDecodeError, TypeError):
-            self.pretty_view.setPlainText("Invalid JSON")
-            self.paths_view.setRowCount(0)
-            return
+        # Update the viewer with the loaded request and response
+        self._update_content(self.tab_widget, request.get("response_body"))
 
-        # Pretty print JSON
-        pretty = json.dumps(json_data, indent=4, ensure_ascii=False)
-        self.pretty_view.setPlainText(pretty)
+    def set_request_time(self, ns: float) -> None:
+        """Set the request time in milliseconds."""
+        if ns is None:
+            raise ValueError("Request time cannot be None")
+        if ns < 0:
+            raise ValueError("Request time cannot be negative")
 
-        # Flatten and display in path-value table
-        flat_items = self._flatten_json(json_data)
-        self.paths_view.setRowCount(len(flat_items))
-        for row, (path, value) in enumerate(flat_items.items()):
-            self.paths_view.setItem(row, 0, QTableWidgetItem(path))
-            self.paths_view.setItem(row, 1, QTableWidgetItem(str(value)))
+        request_time = ns
 
-    def _flatten_json(self, data, parent_key='', sep='.') -> dict:
-        """Recursively flattens a JSON structure into a dict of paths to values."""
-        items = {}
-        if isinstance(data, dict):
-            for key, value in data.items():
-                full_key = f"{parent_key}{sep}{key}" if parent_key else key
-                items.update(self._flatten_json(value, full_key, sep))
-        elif isinstance(data, list):
-            for i, value in enumerate(data):
-                full_key = f"{parent_key}[{i}]"
-                items.update(self._flatten_json(value, full_key, sep))
-        else:
-            items[parent_key] = data
-        return items
+        units = {
+            "ms": 1000,
+            "s": 1000,
+            "min": 60,
+            "h": 60
+        }
+        unit = "ns"
+        for u, factor in units.items():
+            if request_time < factor: break
+            unit = u
+            request_time /= factor
+
+        self.request_time_value.setText(f"{request_time:.2f}")
+        self.request_time_unit.setText(unit)

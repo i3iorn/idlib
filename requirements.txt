@@ -4,6 +4,7 @@ PyQt6~=6.9.0
 maturin~=1.8.3
 python-dotenv~=1.1.0
 git+https://github.com/i3iorn/bitwarden_secrets_manager_python.git
+git+https://github.com/i3iorn/PyQt6_JsonTextEdit.git
 git+https://github.com/i3iorn/api_essentials.git@master#egg=api_essentials
 setuptools~=80.1.0
 jsonschema~=4.23.0

@@ -150,7 +150,7 @@ class SpecRegistry:
             logger.debug(f"Registering spec '{name}'")
             self._registry[name] = spec
 
-        signal_emitter.api_available.emit(name)
+        signal_emitter.apiAvailable.emit(name)
 
     def unregister(self, name: str) -> None:
         """

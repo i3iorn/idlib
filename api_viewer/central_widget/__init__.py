@@ -1,9 +1,10 @@
 import logging
 
 from PyQt6.QtCore import Qt, QThreadPool
-from PyQt6.QtWidgets import QWidget, QHBoxLayout, QSlider, QSplitter
+from PyQt6.QtWidgets import QWidget, QHBoxLayout, QSlider, QSplitter, QTabWidget
 
 from api_viewer.api import load_apis, load_clients
+from api_viewer.central_widget.history_widget import HistoryWidget
 from api_viewer.constants import NO_MARGIN
 from api_viewer.central_widget.config_widget import ConfigWidget
 from api_viewer.central_widget.request_widget import RequestWidget
@@ -21,7 +22,7 @@ class CentralWidget(QWidget):
         super().__init__(parent)
         self._setup_ui()
         self._load_data()
-        signal_emitter.ui_loaded.emit()
+        signal_emitter.uiLoaded.emit()
 
     def _load_data(self):
         self.api_loader_thread = WorkerThread(
@@ -48,16 +49,21 @@ class CentralWidget(QWidget):
         self._setup_request_section(splitter_widget)
         self._setup_response_section(splitter_widget)
 
-        splitter_widget.setStretchFactor(1,1)
-        splitter_widget.setStretchFactor(2,2)
-        splitter_widget.setStretchFactor(3,4)
+        splitter_widget.setStretchFactor(0,2)
+        splitter_widget.setStretchFactor(1,3)
+        splitter_widget.setStretchFactor(2,4)
 
         self.setLayout(main_layout)
 
     def _setup_conf_section(self, main_layout):
         # Create the combo boxes and add them to the layout
+        tab_group = QTabWidget(self)
         conf_widget = ConfigWidget(self)
-        main_layout.addWidget(conf_widget)
+        tab_group.addTab(conf_widget, "New Request")
+        hist_widget = HistoryWidget(self)
+        tab_group.addTab(hist_widget, "Historic Request")
+
+        main_layout.addWidget(tab_group)
 
     def _setup_request_section(self, main_layout):
         # Create two empty widgets

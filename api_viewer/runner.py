@@ -47,15 +47,15 @@ class WorkerThread(QRunnable):
         """
         # signal_emitter must have these pyqtSignal attributes:
         #   started, result, error, finished
-        signal_emitter.job_started.emit(self.job_id)
+        signal_emitter.jobStarted.emit(self.job_id)
 
         try:
             result = self.func(*self.args, **self.kwargs)
         except Exception as e:
             tb = traceback.format_exc()
             # emit a tuple (exception instance, traceback string)
-            signal_emitter.job_error.emit(self.job_id, (e, tb))
+            signal_emitter.jobError.emit(self.job_id, (e, tb))
         else:
-            signal_emitter.job_result.emit(self.job_id, WorkerResult(result))
+            signal_emitter.jobResult.emit(self.job_id, WorkerResult(result))
         finally:
-            signal_emitter.job_finished.emit(self.job_id)
+            signal_emitter.jobFinished.emit(self.job_id)

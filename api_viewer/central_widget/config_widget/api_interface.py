@@ -4,6 +4,11 @@ from typing import Any, Dict
 from api_viewer.log.decorator import log_method_calls
 
 
+class ApiServiceError(Exception):
+    """Custom exception for API service errors."""
+    pass
+
+
 class ApiServiceInterface(ABC):
     @abstractmethod
     async def call_api(self, api_spec: Any, path: str, client_spec: Any, payload: Dict[str, Any]) -> None:

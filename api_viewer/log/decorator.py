@@ -48,7 +48,7 @@ def log_method_calls(include_dunder: bool = False):
         try:
             bound = sig.bind_partial(*args, **kwargs)
         except TypeError as e:
-            print(f"Error binding method signature: {e}", args, kwargs)
+            print(f"Error binding method signature: {e}", method.__name__, args, kwargs)
             raise
 
         bound.apply_defaults()
