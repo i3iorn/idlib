@@ -33,6 +33,7 @@ class HistoryWidget(CentralChildWidget):
     def _load_settings(self):
         storage = RequestResponseStorage()
         for item in storage.fetch_all():
+            print(item)
             if item.get("token_request_id") is not None:
                 row = self.model.rowCount()
                 self.model.insertRow(row)

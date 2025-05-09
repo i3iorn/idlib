@@ -6,6 +6,7 @@ from PyQt6.QtWidgets import QListView, QSplitter
 from api_viewer.central_widget.core import CentralChildWidget, RequestResponseViewTabs
 from api_viewer.constants import NO_MARGIN
 from api_viewer.log.decorator import log_method_calls
+from api_viewer.utils import request_dict_to_http_format, response_dict_to_http_format
 
 
 @log_method_calls()
@@ -49,11 +50,16 @@ class RequestWidget(CentralChildWidget):
         """Load the request with the given ID."""
         # Load the request and response from the database
         request = self.storage.fetch_request(req_id)
+        print(request)
         token_request = self.storage.fetch_request(request["token_request_id"])
+        print(token_request)
+        token_response = self.storage.fetch_response(request["token_request_id"])
 
         # Update the viewer with the loaded request and response
-        self._update_content(self.viewer_widget, request.get("request_body"))
+        self._update_content(self.viewer_widget, request_dict_to_http_format(**request))
 
         if token_request:
-            self._update_content(self.token_request_widget, token_request.get("request_body"))
-            self._update_content(self.token_response_widget, token_request.get("response_body"))
+            token_http_request = request_dict_to_http_format(**token_request)
+            token_http_response = response_dict_to_http_format(**token_response)
+            self._update_content(self.token_request_widget, request=token_http_request)
+            self._update_content(self.token_response_widget, request=token_http_response)

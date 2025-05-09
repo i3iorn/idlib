@@ -1,42 +1,32 @@
 import asyncio
 import json
 import logging
+from qasync import asyncSlot
+from abc import abstractmethod, ABC
 from contextlib import contextmanager
 from copy import deepcopy
+from dataclasses import dataclass
 from functools import lru_cache
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Optional, Dict, Callable
 
-from PyQt6.QtGui import QFocusEvent
-from qasync import asyncSlot
-from PyQt6.QtCore import Qt, QSettings, QSignalBlocker, QTimer
-from PyQt6.QtWidgets import (
-    QVBoxLayout,
-    QComboBox,
-    QLabel,
-    QSplitter,
-    QWidget,
-    QCheckBox,
-    QSizePolicy,
-    QSpacerItem,
-    QProgressBar, QMessageBox,
+from PyQt6.QtCore import QSettings, Qt, QSignalBlocker, QTimer
+from PyQt6.QtWidgets import QComboBox, QWidget, QLabel, QVBoxLayout, \
+    QSplitter, QSpacerItem, QSizePolicy, QMessageBox, QProgressBar
+
+from PyQt6_JsonTextEdit import (
+    QJsonTextEdit
 )
 
-from api_viewer.central_widget.config_widget.api_interface import ApiServiceInterface, ApiService, ApiServiceError
-from api_viewer.central_widget.config_widget.core import (
-    ControlKey,
-    ConfigState,
-    UIFactory,
-    DynamicControlManager, ControlType, ControlKeyType,
-)
-from api_viewer.central_widget.config_widget.settings import SettingsManager
+from api_viewer.ui_helpers import add_labeled_row, populate_combo
+from api_viewer.central_widget.config_widget.utils import JsonDict, ControlKey, ControlKeyType
+
+from api_viewer.widget_factory import WidgetFactory
 from api_viewer.central_widget.core import CentralChildWidget
 from api_viewer.constants import NO_MARGIN
-from api_viewer.json_text_edit import JsonTextEdit
+from api_viewer.emitter import signal_emitter
 from api_viewer.log.decorator import log_method_calls
 
 logger = logging.getLogger(__name__)
-
-JsonDict = Dict[str, Any]
 
 _BODY_LABEL       = "Body:"
 _JSON_DELAY_MS   = 500
@@ -44,9 +34,21 @@ _SUCCESS_STYLE   = "color: green;"
 _ERROR_STYLE     = "color: red;"
 _INVALID_JSON_TXT= "Invalid JSON format."
 
-# -----------------------------------------------------------------------------
-# Helper: merge schemas
-# -----------------------------------------------------------------------------
+
+@dataclass
+class ConfigState:
+    api_spec: Any = None
+    endpoint_path: str = ""
+    client_spec: Any = None
+    prodtest: bool = False
+    external: bool = False
+
+    def set_api_spec(self, api_spec: Any) -> None:
+        self.api_spec = api_spec
+
+    def set_endpoint(self, endpoint_path: str) -> None:
+        self.endpoint_path = endpoint_path
+
 
 def _merge_schemas(base: JsonDict, override: JsonDict) -> JsonDict:
     result = deepcopy(base)
@@ -59,10 +61,29 @@ def _merge_schemas(base: JsonDict, override: JsonDict) -> JsonDict:
             result[key] = deepcopy(val)
     return result
 
+@log_method_calls()
+class SettingsManager:
+    def __init__(self, settings: QSettings):
+        self._settings = settings
 
-# -----------------------------------------------------------------------------
-# Schema resolver for OpenAPI JSON schemas
-# -----------------------------------------------------------------------------
+    def load_index(self, key: ControlKey, default: int = 0) -> int:
+        return self._settings.value(f"{key.name}Index", default, int)
+
+    def save_index(self, key: ControlKey, index: int) -> None:
+        self._settings.setValue(f"{key.name}Index", index)
+
+    def load_text(self, key: str) -> str:
+        return self._settings.value(key, "")
+
+    def save_text(self, key: str, text: str) -> None:
+        self._settings.setValue(key, text)
+
+    def save_flag(self, key: Any, flag: bool) -> None:
+        self._settings.setValue(key.name, flag)
+
+    def load_flag(self, key: Any, default: bool = False) -> bool:
+        return self._settings.value(key.name, default, bool)
+
 class SchemaResolver:
     def __init__(self, api_spec: JsonDict) -> None:
         self.api_spec = api_spec
@@ -107,6 +128,61 @@ class SchemaResolver:
         return self._resolve_refs(raw) if raw else None
 
 
+@log_method_calls()
+class DynamicControlManager:
+    def __init__(self, layout: QVBoxLayout):
+        self._layout = layout
+        self._controls: Dict[str, QWidget] = {}
+
+    def add(self, key: str, widget: QWidget) -> None:
+        self.clear(key)
+        self._controls[key] = widget
+        self._layout.addWidget(widget)
+        signal_emitter.dynamicControlUpdated.emit()
+
+    def clear(self, key: str) -> None:
+        if widget := self._controls.pop(key, None):
+            self._layout.removeWidget(widget)
+            widget.deleteLater()
+        signal_emitter.dynamicControlUpdated.emit()
+
+    def clear_all(self) -> None:
+        for key in list(self._controls):
+            self.clear(key)
+        signal_emitter.dynamicControlUpdated.emit()
+
+    def set_all_enabled(self, enabled: bool) -> None:
+        for widget in self._controls.values():
+            widget.setEnabled(enabled)
+        signal_emitter.dynamicControlUpdated.emit()
+
+    @property
+    def controls(self) -> Dict[str, QWidget]:
+        return self._controls
+
+    def keys(self):
+        return self._controls.keys()
+
+
+class ApiServiceError(Exception):
+    """Custom exception for API service errors."""
+    pass
+
+
+class ApiServiceInterface(ABC):
+    @abstractmethod
+    async def call_api(self, api_spec: Any, path: str, client_spec: Any, payload: Dict[str, Any]) -> None:
+        pass
+
+
+@log_method_calls()
+class ApiService(ApiServiceInterface):
+    def __init__(self, handler):
+        self._handler = handler
+
+    async def call_api(self, api_spec: Any, path: str, client_spec: Any, payload: Dict[str, Any]) -> None:
+        await self._handler.call(api_spec, path, client_spec, payload)
+
 # -----------------------------------------------------------------------------
 # Main configuration widget
 # -----------------------------------------------------------------------------
@@ -118,6 +194,12 @@ class ConfigWidget(CentralChildWidget):
         settings: Optional[QSettings] = None,
         api_service: Optional[ApiServiceInterface] = None,
     ):
+        self.api_control_widget = None
+        self.endpoint_control_widget = None
+        self.client_control_widget = None
+        self.prodtest_control_widget = None
+        self.external_control_widget = None
+
         self._resolvers: Dict[str, SchemaResolver] = {}
         self.state = ConfigState()
         self._settings = settings or QSettings("ApiViewer", "ConfigWidget")
@@ -134,7 +216,6 @@ class ConfigWidget(CentralChildWidget):
     def _setup_ui(self) -> None:
         self._init_layout()
         self._connect_signals()
-        self._load_settings()
 
     def _init_layout(self) -> None:
         self.splitter = QSplitter(Qt.Orientation.Vertical)
@@ -149,10 +230,12 @@ class ConfigWidget(CentralChildWidget):
         self.dynamic_manager = DynamicControlManager(layout)
 
         # generic controls
-        self.generic_controls = {
-            key: UIFactory.widget(ControlKeyType[key.name].value, key.name.title(), layout)
-            for key in ControlKey
-        }
+        for key in ControlKey:
+            widget = WidgetFactory.widget(ControlKeyType[key.name].value)
+            add_labeled_row(layout, key.name.title(), widget)
+            widget_name = key.name.lower() + "_control_widget"
+            setattr(self, widget_name, widget)
+
         layout.addItem(QSpacerItem(0, 0, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding))
         return panel
 
@@ -162,7 +245,7 @@ class ConfigWidget(CentralChildWidget):
         layout.setContentsMargins(*NO_MARGIN)
         layout.addWidget(QLabel(_BODY_LABEL), alignment=Qt.AlignmentFlag.AlignTop)
 
-        self.text_edit = JsonTextEdit()
+        self.text_edit = QJsonTextEdit()
         self.text_edit.setTextChangeDelay(_JSON_DELAY_MS)
         layout.addWidget(self.text_edit)
 
@@ -175,7 +258,8 @@ class ConfigWidget(CentralChildWidget):
         self.error_label.setStyleSheet(_ERROR_STYLE)
         layout.addWidget(self.error_label)
 
-        self.send_button = UIFactory.button("Send request", layout)
+        self.send_button = WidgetFactory.button("Send request")
+        layout.addWidget(self.send_button)
         return panel
 
     # -------------------------------------------------------------------------
@@ -188,12 +272,12 @@ class ConfigWidget(CentralChildWidget):
         self._cancel_timer.timeout.connect(self._on_body_edit)
 
         self.signals.apiAvailable.connect(self._populate_apis)
-        self.generic_controls[ControlKey.API].activated.connect(self._on_api_change)
-        self.generic_controls[ControlKey.EXTERNAL].checkStateChanged.connect(self._on_external_toggle)
-        self.generic_controls[ControlKey.ENDPOINT].activated.connect(
-            lambda _: self.state.set_endpoint(self.generic_controls[ControlKey.ENDPOINT].currentText())
+        self.api_control_widget.activated.connect(self._on_api_change)
+        self.external_control_widget.checkStateChanged.connect(self._on_external_toggle)
+        self.endpoint_control_widget.activated.connect(
+            lambda _: self.state.set_endpoint(self.endpoint_control_widget.currentText())
         )
-        self.generic_controls[ControlKey.CLIENT].activated.connect(self._on_client_change)
+        self.client_control_widget.activated.connect(self._on_client_change)
         self.signals.dynamicControlUpdated.connect(self._refresh_body_template)
         self.text_edit.jsonValidityChanged.connect(self._on_json_validity)
         self.send_button.clicked.connect(self._on_send)
@@ -203,7 +287,7 @@ class ConfigWidget(CentralChildWidget):
     # Loading & Settings
     # -------------------------------------------------------------------------
     def _populate_apis(self, api) -> None:
-        combo = self.generic_controls[ControlKey.API]
+        combo = self.api_control_widget
         combo.clear()
         for name, spec in self.spec_registry.all().items():
             combo.addItem(name, spec)
@@ -212,54 +296,57 @@ class ConfigWidget(CentralChildWidget):
         with QSignalBlocker(combo):
             combo.setCurrentIndex(idx)
 
-    def _load_settings(self) -> None:
-        self.text_edit.setPlainText(self.settings.load_text("bodyText"))
-
     def _on_reload_body_from_id(self, req_id) -> None:
         request = self.storage.fetch_request(req_id)
-        self.text_edit.setText(request.get("request_body"))
+        self.text_edit.setJson(request.get("request_body"))
         self.text_edit.updateFormat()
 
     # -------------------------------------------------------------------------
     # Handlers
     # -------------------------------------------------------------------------
     def _on_api_change(self, index: int) -> None:
-        api_name = self.generic_controls[ControlKey.API].currentText()
+        api_name = self.api_control_widget.currentText()
         if api_name not in self._resolvers:
-            spec = self.generic_controls[ControlKey.API].itemData(index)
+            spec = self.api_control_widget.itemData(index)
             self._resolvers[api_name] = SchemaResolver(spec)
         self._resolver = self._resolvers[api_name]
         spec = self._resolver.api_spec
-        self.settings.save_index(ControlKey.API, self.generic_controls[ControlKey.API].currentIndex())
+        self.settings.save_index(ControlKey.API, self.api_control_widget.currentIndex())
         self.state.set_api_spec(spec)
         self.dynamic_manager.clear_all()
         self.error_label.setVisible(False)
-        client_items = self.client_registry.all() if self.generic_controls[ControlKey.EXTERNAL].checkState() == Qt.CheckState.Checked else self.client_registry.internal_clients()
-        UIFactory.populate_combo(self.generic_controls[ControlKey.ENDPOINT], spec.get("paths", {}))
-        self.state.endpoint_path = self.generic_controls[ControlKey.ENDPOINT].currentText()
-        UIFactory.populate_combo(self.generic_controls[ControlKey.CLIENT], client_items)
-        self.state.client_spec = self.generic_controls[ControlKey.CLIENT].currentData()
+
+        if self.external_control_widget.checkState() == Qt.CheckState.Checked:
+            client_items = self.client_registry.all()
+        else:
+            client_items = self.client_registry.internal_clients()
+
+        populate_combo(self.endpoint_control_widget, spec.get("paths", {}))
+        self.state.endpoint_path = self.endpoint_control_widget.currentText()
+        populate_combo(self.client_control_widget, client_items)
+        self.state.client_spec = self.client_control_widget.currentData()
+
         self._refresh_body_template()
 
     def _on_external_toggle(self, state: int) -> None:
         # save setting
         self.settings.save_flag(ControlKey.EXTERNAL, state == Qt.CheckState.Checked)
         # re-populate clients based on new flag
-        self._on_api_change(self.generic_controls[ControlKey.API].currentIndex())
+        self._on_api_change(self.api_control_widget.currentIndex())
 
     def _on_client_change(self, index: int) -> None:
-        spec = self.generic_controls[ControlKey.CLIENT].itemData(index)
+        spec = self.client_control_widget.itemData(index)
         if not spec.get("internalClient", False):
             answer = self._request_confirmation(spec)
             if not answer:
                 return
         self.dynamic_manager.clear_all()
         self.state.client_spec = spec
-        handler = self._dynamic_handlers.get(self.generic_controls[ControlKey.API].currentText())
+        handler = self._dynamic_handlers.get(self.api_control_widget.currentText())
         if handler:
             handler(spec)
 
-    def _on_json_validity(self, is_valid: bool, _msg: str) -> None:
+    def _on_json_validity(self, is_valid: bool, _msg: str = "") -> None:
         self.send_button.setEnabled(is_valid)
         self.error_label.setVisible(not is_valid)
         if not is_valid:
@@ -278,7 +365,7 @@ class ConfigWidget(CentralChildWidget):
     def _refresh_body_template(self, *args) -> None:
         if self.user_changed_body:
             return
-        endpoint_spec = self.generic_controls[ControlKey.ENDPOINT].currentData()
+        endpoint_spec = self.endpoint_control_widget.currentData()
         if not endpoint_spec:
             self.text_edit.setPlainText("")
             return
@@ -357,24 +444,29 @@ class ConfigWidget(CentralChildWidget):
         items2: Any,
     ) -> None:
         for key, items in ((key1, items1), (key2, items2)):
-            combo = self.generic_controls[key]
+            combo = getattr(self, f"{key.name.lower()}_control_widget")
             combo.clear()
             for name, data in (items.items() if isinstance(items, dict) else
                                ((getattr(i, 'name', str(i)), i) for i in items)):
                 combo.addItem(name, data)
 
-    def _set_all_enabled(self, on: bool) -> None:
-        for ctrl in self.generic_controls.values():
-            ctrl.setEnabled(on)
-        self.dynamic_manager.set_all_enabled(on)
-        self.send_button.setEnabled(on)
+    def _set_all_enabled(self, enabled: bool) -> None:
+        self.api_control_widget.setEnabled(enabled)
+        self.endpoint_control_widget.setEnabled(enabled)
+        self.client_control_widget.setEnabled(enabled)
+        self.prodtest_control_widget.setEnabled(enabled)
+        self.external_control_widget.setEnabled(enabled)
+        self.text_edit.setEnabled(enabled)
+        self.send_button.setEnabled(enabled)
+
+        self.dynamic_manager.set_all_enabled(enabled)
 
     def _request_confirmation(self, spec: JsonDict) -> bool:
         # Show a confirmation dialog to the user
         title = "Confirm external client usage"
         message = (
             f"Are you sure you want to use the external client '{spec.get('clientId')}' "
-            f"for the API '{self.generic_controls[ControlKey.API].currentText()}'?"
+            f"for the API '{self.api_control_widget.currentText()}'?"
         )
         reply = QMessageBox.question(
             self,

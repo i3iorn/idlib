@@ -1,23 +1,36 @@
+# ——— Standard Library ————————————————————————————————
 import json
 import logging
 import os
 from typing import List, Iterator, Any, Tuple, Optional, overload, Dict
 
+# ——— Third-party Libraries ———————————————————————————
 import dotenv
-from PyQt6.QtCore import QStringListModel, QSortFilterProxyModel, Qt, QAbstractItemModel, QModelIndex
-from PyQt6.QtGui import QStandardItemModel, QStandardItem
-from PyQt6.QtWidgets import QWidget, QSizePolicy, QVBoxLayout, QTabWidget, QListView, QTreeView, \
-    QLabel, QLineEdit, QTableView, QHBoxLayout, QAbstractItemView
-
 from bitwarden_secrets_manager_python import BWS
 
+# ——— PyQt6 Components —————————————————————————————
+from PyQt6.QtCore import QStringListModel, QSortFilterProxyModel, Qt, QAbstractItemModel, QModelIndex
+from PyQt6.QtGui import QStandardItemModel, QStandardItem
+from PyQt6.QtWidgets import (
+    QWidget, QSizePolicy, QVBoxLayout, QTabWidget,
+    QListView, QTreeView, QLabel, QLineEdit,
+    QTableView, QHBoxLayout, QAbstractItemView
+)
+
+# ——— QJson Components ———————————————————————————————
+from PyQt6_JsonTextEdit import (
+    QJsonTextEdit, QJsonTreeView, QJsonModel,
+    QJsonListView, QJsonTableView
+)
+
+# ——— Application-specific Modules ————————————————————
 from api_viewer.api import SpecRegistry, ClientRegistry
 from api_viewer.api.request_handler import APIRequestHandler
 from api_viewer.constants import NO_MARGIN
 from api_viewer.emitter import signal_emitter
-from api_viewer.json_text_edit import JsonTextEdit
 from api_viewer.log.decorator import log_method_calls
 from api_viewer.storage import RequestResponseStorage
+
 
 dotenv.load_dotenv()
 logger =  logging.getLogger(__name__)
@@ -252,11 +265,10 @@ class RequestResponseViewTabs(QWidget):
         self.tabs.addTab(tab, "Raw")
 
     def _make_pretty_tab(self):
-        view = JsonTextEdit(read_only=True)
+        self.pretty_view = QJsonTreeView()
         # initially empty—set via update_content
-        self.pretty_model = view.model()
-        tab = ViewTab(view, self.pretty_model)
-        self.pretty_view = view
+        self.pretty_model = QJsonModel(self)
+        tab = ViewTab(self.pretty_view, self.pretty_model)
         self.tabs.addTab(tab, "Pretty")
 
     def _make_tree_tab(self):
@@ -293,7 +305,17 @@ class RequestResponseViewTabs(QWidget):
             self.raw_view.setEnabled(True)
             lines = http_response.splitlines()
             self.raw_model.setStringList(lines)
-            data = json.loads(lines[-1].strip())
+            try:
+                data = json.loads(lines[-1].strip())
+            except json.JSONDecodeError:
+                logger.warning("Invalid JSON—switching to Raw")
+                self.tabs.setCurrentIndex(0)
+                self.raw_view.setEnabled(True)
+
+                self.tree_view.setDisabled(True)
+                self.pretty_view.setDisabled(True)
+                self.paths_view.setDisabled(True)
+                return
         elif dict_response is not None:
             self.raw_view.setDisabled(True)
             data = dict_response
@@ -302,7 +324,8 @@ class RequestResponseViewTabs(QWidget):
 
         # Pretty
         try:
-
+            pretty = json.dumps(data, indent=4, ensure_ascii=False)
+            self.pretty_view.setPlainText(pretty)
             self.tree_view.setEnabled(True)
             self.pretty_view.setEnabled(True)
             self.paths_view.setEnabled(True)
@@ -313,10 +336,6 @@ class RequestResponseViewTabs(QWidget):
             self.pretty_view.setDisabled(True)
             self.paths_view.setDisabled(True)
             return
-
-        pretty = json.dumps(data, indent=4, ensure_ascii=False)
-        self.pretty_view.setPlainText(pretty)
-        self.pretty_model = self.pretty_view.model()
 
         # Tree
         self._populate_tree(data)

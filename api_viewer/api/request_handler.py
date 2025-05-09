@@ -60,9 +60,10 @@ class APIRequestHandler:
         token_request: httpx.Request = response.request.extensions["token_request"]
         token_req_id = self.storage.insert_request(
             str(token_request.method),
-            str(response.request.url),
-            json.dumps(dict(response.request.headers)),
-            response.request.content.decode("utf-8")
+            str(token_request.url),
+            json.dumps(dict(token_request.headers)),
+            token_request.content.decode("utf-8"),
+            http_version=response.http_version
         )
         token_response: Response = response.request.extensions["token_response"]
         self.storage.insert_response(
@@ -70,7 +71,9 @@ class APIRequestHandler:
             token_response.status_code,
             json.dumps(dict(token_response.headers)),
             token_response.perf_request_time,
-            token_response.text
+            token_response.text,
+            http_version=token_response.http_version,
+            reason_phrase=token_response.reason_phrase
         )
 
         req_id = self.storage.insert_request(
@@ -78,14 +81,17 @@ class APIRequestHandler:
             str(response.request.url),
             json.dumps(dict(response.request.headers)),
             response.request.content.decode("utf-8"),
-            token_request_id=token_req_id
+            token_request_id=token_req_id,
+            http_version=response.http_version
         )
         self.storage.insert_response(
             req_id,
             response.status_code,
             json.dumps(dict(response.headers)),
             response.perf_request_time,
-            response.text
+            response.text,
+            http_version=response.http_version,
+            reason_phrase=response.reason_phrase
         )
         if response.status_code == 200:
             self._store_individual_values(req_id, response.json())

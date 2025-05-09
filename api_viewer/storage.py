@@ -16,20 +16,20 @@ class RequestResponseStorage:
         with self.lock, self.conn, open(schema_path) as script:
             self.conn.executescript(script.read().strip())
 
-    def insert_request(self, method: str, url: str, headers: str = '', body: str = '', token_request_id: int = None) -> int:
+    def insert_request(self, method: str, url: str, headers: str = '', body: str = '', token_request_id: int = None, http_version: str = "") -> int:
         with self.lock:
             cursor = self.conn.execute(
-                "INSERT INTO requests (token_request_id, method, url, headers, body) VALUES (?, ?, ?, ?, ?)",
-                (token_request_id, method, url, headers, body)
+                "INSERT INTO requests (token_request_id, method, url, headers, body, http_version) VALUES (?, ?, ?, ?, ?, ?)",
+                (token_request_id, method, url, headers, body, http_version)
             )
             self.conn.commit()
             return cursor.lastrowid
 
-    def insert_response(self, request_id: int, status_code: int, headers: str, response_time: float, body: str = '') -> int:
+    def insert_response(self, request_id: int, status_code: int, headers: str, response_time: float, body: str = '', http_version: str = "", reason_phrase: str = "") -> int:
         with self.lock:
             cursor = self.conn.execute(
-                "INSERT INTO responses (request_id, response_time, status_code, headers, body) VALUES (?, ?, ?, ?, ?)",
-                (request_id, response_time, status_code, headers, body)
+                "INSERT INTO responses (request_id, response_time, status_code, headers, body, http_version, reason_phrase) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (request_id, response_time, status_code, headers, body, http_version, reason_phrase)
             )
             self.conn.commit()
             return cursor.lastrowid
@@ -50,7 +50,22 @@ class RequestResponseStorage:
 
     def fetch_request(self, request_id: int) -> Dict[str, Any]:
         with self.lock:
-            cursor = self.conn.execute("SELECT * FROM request_response WHERE request_id = ?", (request_id,))
+            cursor = self.conn.execute("SELECT * FROM requests WHERE id = ?", (request_id,))
+            row = cursor.fetchone()
+            return dict(row) if row else None
+
+    def fetch_response(self, request_id: int = None, response_id: int = None) -> Dict[str, Any]:
+        if request_id is not None:
+            column_name = "request_id"
+            column_value = request_id
+        elif response_id is not None:
+            column_name = "id"
+            column_value = response_id
+        else:
+            raise ValueError("Either request_id or response_id must be provided")
+
+        with self.lock:
+            cursor = self.conn.execute(f"SELECT * FROM responses WHERE {column_name} = ?", (column_value,))
             row = cursor.fetchone()
             return dict(row) if row else None
 

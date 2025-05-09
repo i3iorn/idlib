@@ -1,14 +1,8 @@
-import json
-from PyQt6.QtCore import QStringListModel, Qt
-from PyQt6.QtGui import QStandardItemModel, QStandardItem
-from PyQt6.QtWidgets import (
-    QTabWidget, QListView, QPlainTextEdit, QTableWidget, QTableWidgetItem,
-    QVBoxLayout, QWidget, QSlider, QHBoxLayout, QLabel, QTreeView, QSpacerItem, QSizePolicy
-)
+from PyQt6.QtWidgets import (QHBoxLayout, QLabel, QSpacerItem, QSizePolicy)
 
 from api_viewer.central_widget.core import CentralChildWidget, RequestResponseViewTabs
-from api_viewer.json_text_edit import JsonTextEdit
 from api_viewer.log.decorator import log_method_calls
+from api_viewer.utils import response_dict_to_http_format
 
 
 @log_method_calls()
@@ -45,12 +39,11 @@ class ResponseWidget(CentralChildWidget):
     def _load_request_id(self, req_id: int) -> None:
         """Load the request with the given ID."""
         # Load the request and response from the database
-        request = self.storage.fetch_request(req_id)
-        print(request)
-        self.set_request_time(request.get("response_time"))
+        response = self.storage.fetch_response(req_id)
+        self.set_request_time(response.get("response_time"))
 
         # Update the viewer with the loaded request and response
-        self._update_content(self.tab_widget, request.get("response_body"))
+        self._update_content(self.tab_widget, response_dict_to_http_format(**response))
 
     def set_request_time(self, ns: float) -> None:
         """Set the request time in milliseconds."""
