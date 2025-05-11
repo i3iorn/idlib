@@ -117,7 +117,7 @@ class ClientRegistry:
             }
         )
 
-    def all(self) -> Dict[str, dict]:
+    def all(self, host: str = None) -> Dict[str, dict]:
         """
         Return a shallow copy of all registered specs.
         This method is thread-safe and returns a copy of the registry
@@ -130,9 +130,18 @@ class ClientRegistry:
         if not self._initialized:
             raise RuntimeError("ClientRegistry not initialized")
         with self._lock:
-            return self._registry.copy()
+            if host:
+                return {
+                    name: client
+                    for name, client in self._registry.items()
+                    if "host" in client and client["host"].lower() == host.lower()
+                }
+            else:
+                # Return all clients if no host is specified
+                logger.debug("Returning all registered clients")
+                return self._registry.copy()
 
-    def internal_clients(self) -> Dict[str, dict]:
+    def internal_clients(self, host: str = None) -> Dict[str, dict]:
         """
         Return a shallow copy of all registered internal clients.
         This method is thread-safe and returns a copy of the registry
@@ -144,11 +153,11 @@ class ClientRegistry:
         """
         return {
             name: client
-            for name, client in self.all().items()
+            for name, client in self.all(host).items()
             if client.get("internalClient", False)
         }
 
-    def external_clients(self) -> Dict[str, dict]:
+    def external_clients(self, host: str = None) -> Dict[str, dict]:
         """
         Return a shallow copy of all registered external clients.
         This method is thread-safe and returns a copy of the registry
@@ -160,7 +169,7 @@ class ClientRegistry:
         """
         return {
             name: client
-            for name, client in self.all().items()
+            for name, client in self.all(host).items()
             if not client.get("internalClient", False)
         }
 

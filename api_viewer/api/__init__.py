@@ -85,10 +85,11 @@ def load_clients():
     :note: The JSON schema file should be named "client-schema.json".
     """
     client_registry = ClientRegistry()
-    with open("config/clients.json", "r", encoding="utf-8") as client_file, open("config/client-schema.json", "r", encoding="utf-8") as schema_file:
-        clients = json.load(client_file)
+    with (open("config/clients.json", "r", encoding="utf-8") as clients_file,
+          open("config/clients-schema.json", "r", encoding="utf-8") as schema_file):
+        clients = json.load(clients_file)
         schema = json.load(schema_file)
         jsonschema.validate(clients, schema)
 
-    for client in clients:
-        client_registry.register(client["clientId"],client)
+    for client in clients.get("clients", []):
+        client_registry.register(client["name"],client)

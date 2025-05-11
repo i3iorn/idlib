@@ -3,7 +3,7 @@ import traceback
 
 from PyQt6.QtCore import QRunnable
 
-from api_viewer.emitter import signal_emitter  # your singleton emitter
+from api_viewer.emitter import signal_emitter
 from api_viewer.worker_result import WorkerResult
 
 
@@ -59,3 +59,5 @@ class WorkerThread(QRunnable):
             signal_emitter.jobResult.emit(self.job_id, WorkerResult(result))
         finally:
             signal_emitter.jobFinished.emit(self.job_id)
+
+

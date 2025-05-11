@@ -1,6 +1,8 @@
 import asyncio
 import json
 import logging
+
+from httpx import URL
 from qasync import asyncSlot
 from abc import abstractmethod, ABC
 from contextlib import contextmanager
@@ -316,10 +318,12 @@ class ConfigWidget(CentralChildWidget):
         self.dynamic_manager.clear_all()
         self.error_label.setVisible(False)
 
+        host = URL(spec.get("servers")[0]["url"]).host
+
         if self.external_control_widget.checkState() == Qt.CheckState.Checked:
-            client_items = self.client_registry.all()
+            client_items = self.client_registry.all(host)
         else:
-            client_items = self.client_registry.internal_clients()
+            client_items = self.client_registry.internal_clients(host)
 
         populate_combo(self.endpoint_control_widget, spec.get("paths", {}))
         self.state.endpoint_path = self.endpoint_control_widget.currentText()

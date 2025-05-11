@@ -29,6 +29,7 @@ class MainWindow(QMainWindow):
         self._setup_menu()
         self._setup_central_widget()
         self._setup_status_bar()
+        self._connect_signals()
 
     def _setup_menu(self):
         # Create a menu bar
@@ -56,6 +57,27 @@ class MainWindow(QMainWindow):
         # Create a status bar
         status_bar = self.statusBar()
         status_bar.showMessage("Ready")
+
+    def _connect_signals(self):
+        # Connect signals to methods
+        signal_emitter.jobError.connect(self._handle_job_error)
+
+    def _handle_job_error(self, job_id: str, exception_info: tuple):
+        """
+        Handle job errors by displaying a message box.
+        """
+        logger.error(f"Job error: {job_id}")
+        exception, tb = exception_info
+        logger.error(f"Exception: {exception}")
+        logger.error(f"Traceback: {tb}")
+        msg_box = QMessageBox(
+            QMessageBox.Icon.Critical,
+            "Job Error",
+            f"An error occurred in job {job_id}:\n{exception}",
+            QMessageBox.StandardButton.Ok,
+            self
+        )
+        msg_box.exec()
 
     def custom_sys_exception_hook(self, type, value, traceback):
         """

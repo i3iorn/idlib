@@ -3,12 +3,19 @@ import logging
 from typing import Union
 
 import httpx
-from api_essentials import APIFactory, OAuth2Auth, TRUST_UNDEFINED_PARAMETERS, ClientCredentials
+from api_essentials import APIFactory, OAuth2Auth, TokenAuth, TRUST_UNDEFINED_PARAMETERS, ClientCredentials
 from api_essentials.response import Response
 
 from api_viewer.storage import RequestResponseStorage
 
 logger = logging.getLogger(__name__)
+
+
+auth_map = {
+    "OAuth2Auth": OAuth2Auth,
+    "BasicAuth": httpx.BasicAuth,
+    "TokenAuth": TokenAuth,
+}
 
 
 class APIRequestHandler:
@@ -17,11 +24,12 @@ class APIRequestHandler:
         self.signals = signals
         self.storage = RequestResponseStorage()
 
-    async def call(self, spec, endpoint_path, client_spec, body):
+    async def call(self, spec, endpoint_path, client_spec, body, verify=False):
+        auth_class = auth_map.get(client_spec.get("authType", "OAuth2Auth"))
         factory_options = {
             "openapi_spec": spec,
-            "auth": OAuth2Auth(client_spec.get("associatedServer")),
-            "verify": False
+            "auth": auth_class(client_spec.get("associatedServer")),
+            "verify": verify
         }
         if client_spec.get("environment") == "sandbox":
             factory_options["host_prefix"] = "sandbox-"
@@ -36,20 +44,26 @@ class APIRequestHandler:
         logger.debug(f"Scopes: {client_spec.get('scopes', [])}")
         logger.debug(f"Body: {body}")
 
-        if "clientSecretKey" in client_spec:
-            secret = self.secrets_manager.get_secret(client_spec["clientSecretKey"]).get("value")
-        elif "clientSecret" in client_spec:
-            secret = client_spec["clientSecret"]
+        client_auth_info = client_spec.get("auth")
+
+        if "clientId" in client_auth_info and "clientSecretKey" in client_auth_info:
+            secret = self.secrets_manager.get_secret(client_spec["clientSecretKey"])
+            credentials = ClientCredentials(
+                client_id=client_auth_info.get("clientId"),
+                client_secret=secret,
+                scopes=client_auth_info.get("scopes", [])
+            )
+        elif "token" in client_auth_info:
+            secret = self.secrets_manager.get_secret(client_auth_info["token"])
+            credentials = TokenAuth(
+                token=secret
+            )
         else:
-            raise ValueError("Client secret key or client secret must be provided.")
+            raise ValueError("Invalid authentication information provided.")
 
         response = await my_api.request(
             TRUST_UNDEFINED_PARAMETERS,
-            auth_info=ClientCredentials(
-                client_id=client_spec.get("clientId"),
-                client_secret=secret,
-                scopes=client_spec.get("scopes", [])
-            ),
+            auth_info=credentials,
             endpoint=my_api.get_endpoint(endpoint_path),
             **body
         )
