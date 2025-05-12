@@ -1,6 +1,4 @@
 ### PythonVanilla template
-# Package specific
-api_viewer/config/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
