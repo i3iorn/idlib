@@ -1,8 +1,8 @@
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QStandardItemModel
-from PyQt6.QtWidgets import QListView, QTableView, QMenu
+from PyQt6.QtWidgets import QListView, QTableView
 
-from api_viewer.central_widget.core import CentralChildWidget
+from api_viewer.central_widget.core.central_child import CentralChildWidget
 from api_viewer.storage import RequestResponseStorage
 
 
@@ -33,7 +33,6 @@ class HistoryWidget(CentralChildWidget):
     def _load_settings(self):
         storage = RequestResponseStorage()
         for item in storage.fetch_all():
-            print(item)
             if item.get("token_request_id") is not None:
                 row = self.model.rowCount()
                 self.model.insertRow(row)

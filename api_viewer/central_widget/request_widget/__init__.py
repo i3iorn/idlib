@@ -1,9 +1,8 @@
-from typing import overload, Dict, Any, Optional, Union
+from PyQt6.QtCore import Qt
+from PyQt6.QtWidgets import QSplitter
 
-from PyQt6.QtCore import QStringListModel, Qt
-from PyQt6.QtWidgets import QListView, QSplitter
-
-from api_viewer.central_widget.core import CentralChildWidget, RequestResponseViewTabs
+from api_viewer.central_widget.core.request_response_tab import RequestResponseViewTabs
+from api_viewer.central_widget.core.central_child import CentralChildWidget
 from api_viewer.constants import NO_MARGIN
 from api_viewer.log.decorator import log_method_calls
 from api_viewer.utils import request_dict_to_http_format, response_dict_to_http_format
@@ -50,9 +49,7 @@ class RequestWidget(CentralChildWidget):
         """Load the request with the given ID."""
         # Load the request and response from the database
         request = self.storage.fetch_request(req_id)
-        print(request)
         token_request = self.storage.fetch_request(request["token_request_id"])
-        print(token_request)
         token_response = self.storage.fetch_response(request["token_request_id"])
 
         # Update the viewer with the loaded request and response

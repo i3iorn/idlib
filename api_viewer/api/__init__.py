@@ -2,10 +2,16 @@ import asyncio
 import json
 import logging
 import os
+from pathlib import Path
+
+from dotenv import load_dotenv, find_dotenv
 from time import sleep
 
 import jsonschema
 import yaml
+
+load_dotenv(find_dotenv())
+print(os.environ)
 
 from api_viewer.api.client_registry import ClientRegistry
 from api_viewer.api.protocol import Protocol
@@ -15,7 +21,7 @@ from api_viewer.api.spec.reader import SpecReader
 logger = logging.getLogger(__name__)
 
 
-def load_apis(spec_path: str = "config/api_specs.ini") -> None:
+def load_apis(spec_path: str = None) -> None:
     """
     Load API specifications from a file and register them with the SpecRegistry.
     :param spec_path: Path to the API specifications file
@@ -27,8 +33,9 @@ def load_apis(spec_path: str = "config/api_specs.ini") -> None:
 
     :return: None
     """
+    spec_path = spec_path or os.getenv("API_SPEC_FILE") or Path("config/api_specs.ini")
     spec_registry = SpecRegistry()
-    logger.debug("Loading API specifications from file", extra={"spec_path": spec_path})
+    logger.debug("Loading API specifications from file", extra={"extra_spec_path": spec_path})
 
     if not os.path.exists(spec_path):
         raise FileNotFoundError(f"Spec file not found: {spec_path}")
@@ -85,7 +92,8 @@ def load_clients():
     :note: The JSON schema file should be named "client-schema.json".
     """
     client_registry = ClientRegistry()
-    with (open("config/clients.json", "r", encoding="utf-8") as clients_file,
+    clients_path = os.getenv("CLIENTS_FILE") or Path("env/clients.json")
+    with (open(clients_path, "r", encoding="utf-8") as clients_file,
           open("config/clients-schema.json", "r", encoding="utf-8") as schema_file):
         clients = json.load(clients_file)
         schema = json.load(schema_file)

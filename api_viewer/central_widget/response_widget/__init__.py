@@ -1,6 +1,7 @@
 from PyQt6.QtWidgets import (QHBoxLayout, QLabel, QSpacerItem, QSizePolicy)
 
-from api_viewer.central_widget.core import CentralChildWidget, RequestResponseViewTabs
+from api_viewer.central_widget.core.request_response_tab import RequestResponseViewTabs
+from api_viewer.central_widget.core.central_child import CentralChildWidget
 from api_viewer.log.decorator import log_method_calls
 from api_viewer.utils import response_dict_to_http_format
 

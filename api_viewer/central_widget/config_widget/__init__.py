@@ -23,7 +23,7 @@ from api_viewer.ui_helpers import add_labeled_row, populate_combo
 from api_viewer.central_widget.config_widget.utils import JsonDict, ControlKey, ControlKeyType
 
 from api_viewer.widget_factory import WidgetFactory
-from api_viewer.central_widget.core import CentralChildWidget
+from api_viewer.central_widget.core.central_child import CentralChildWidget
 from api_viewer.constants import NO_MARGIN
 from api_viewer.emitter import signal_emitter
 from api_viewer.log.decorator import log_method_calls
