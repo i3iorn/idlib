@@ -57,7 +57,7 @@ class APIRequestHandler:
             secret = self.secrets_manager.get_secret(client_auth_info["token"])
             credentials = TokenAuth(
                 token=secret
-            )
+            )§
         else:
             raise ValueError("Invalid authentication information provided.")
 
