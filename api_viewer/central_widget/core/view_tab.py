@@ -3,8 +3,10 @@ from PyQt6.QtWidgets import QWidget, QAbstractItemView, QVBoxLayout, QHBoxLayout
 
 from api_viewer.central_widget.core.filter_bar import FilterBar
 from api_viewer.central_widget.core.search_bar import SearchBar
+from api_viewer.log.decorator import log_method_calls
 
 
+@log_method_calls()
 class ViewTab(QWidget):
     """
     Combines a view, its model, a SearchBar, and a FilterBar.

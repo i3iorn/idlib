@@ -1,7 +1,10 @@
 from PyQt6.QtCore import QObject
 from PyQt6.QtWidgets import QComboBox, QPushButton, QCheckBox
 
+from api_viewer.log.decorator import log_method_calls
 
+
+@log_method_calls()
 class WidgetFactory:
     @classmethod
     def widget(cls, widget_type: QObject, *args, **kwargs):

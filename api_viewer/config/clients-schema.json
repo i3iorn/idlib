@@ -14,16 +14,16 @@
     },
     "name": {
       "type": "string",
-      "description": "Name of the client schema.",
-      "examples": ["Client Schema"]
+      "description": "Name of the client specification.",
+      "examples": ["Clients"]
     },
     "meta": {
-      "$ref": "#/defs/meta"
+      "$ref": "#/$defs/meta"
     },
     "clients": {
       "type": "array",
       "items": {
-        "$ref": "#/defs/client"
+        "$ref": "#/$defs/client"
       },
       "description": "List of clients.",
       "examples": [
@@ -61,17 +61,17 @@
     "meta",
     "clients"
   ],
-  "defs": {
+  "$defs": {
     "client": {
       "oneOf": [
-        { "$ref": "#/defs/simpleClient" },
-        { "$ref": "#/defs/dnbClient" }
+        { "$ref": "#/$defs/simpleClient" },
+        { "$ref": "#/$defs/dnbClient" }
       ],
       "discriminator": {
         "propertyName": "clientType",
         "mapping": {
-          "simpleClient": "#/defs/simpleClient",
-          "dnbClient":  "#/defs/dnbClient"
+          "simpleClient": "#/$defs/simpleClient",
+          "dnbClient":  "#/$defs/dnbClient"
         }
       }
     },
@@ -92,38 +92,38 @@
           "description": "Type of client"
         },
         "auth": {
-            "$ref": "#/defs/auth",
+            "$ref": "#/$defs/auth",
             "description": "Authentication information for the client."
         }
-      },
-      "required": ["host", "clientType", "internalClient", "auth", "name"]
+      }
     },
     "simpleClient": {
-        "allOf": [
-          { "$ref": "#/defs/baseClient" },
-          {
-            "properties": {
-                "clientType": { "const": "simpleClient" }
-            },
-            "required": ["clientType"]
-          }
-        ]
+      "allOf": [
+        { "$ref": "#/$defs/baseClient" },
+        {
+          "properties": {
+              "clientType": { "const": "simpleClient" }
+          },
+          "required": ["host", "clientType", "internalClient", "auth", "name"],
+          "additionalProperties": false
+        }
+      ]
     },
     "dnbClient": {
       "allOf": [
-        { "$ref": "#/defs/baseClient" },
+        { "$ref": "#/$defs/baseClient" },
+        { "$ref": "#/$defs/environment" },
         {
           "type": "object",
           "properties": {
-            "associatedServer": { "type": "string", "format": "uri" },
             "rulesetKeys": {
-              "type": "array", "items": { "$ref": "#/defs/rulesetKey" }, "minItems": 1
+              "type": "array", "items": { "$ref": "#/$defs/rulesetKey" }, "minItems": 0
             },
-            "environment": { "$ref": "#/defs/environment" },
-            "customerCode": { "type": "string", "pattern": "^[A-Z0-9]+$" },
-            "scopes": { "type": "array", "items": { "type": "string" }, "minItems": 1 }
+            "customerCode": { "type": "string", "pattern": "^[A-Z0-9]{4,8}$" },
+            "clientType": { "const": "dnbClient" }
           },
-          "required": ["associatedServer", "environment", "customerCode", "scopes"]
+          "required": ["host", "clientType", "internalClient", "auth", "name", "environment", "customerCode"],
+          "additionalProperties": false
         }
       ],
       "description": "DNB-specific client"
@@ -143,7 +143,7 @@
           "description": "The channel for which the ruleset key is applicable."
         },
         "country": {
-          "$ref": "#/defs/nordicCountry"
+          "$ref": "#/$defs/nordicCountry"
         },
         "notes": {
           "type": "string",
@@ -161,7 +161,7 @@
     },
     "nordicCountry": {
       "allOf": [
-        { "$ref": "#/defs/country" },
+        { "$ref": "#/$defs/country" },
         { "enum": ["SE", "NO", "FI", "DK"] }
       ]
     },
@@ -173,11 +173,11 @@
     },
     "auth": {
       "allOf": [
-        { "$ref": "#/defs/general" },
+        { "$ref": "#/$defs/general" },
         { "oneOf": [
-            { "$ref": "#/defs/clientCredentials" },
-            { "$ref": "#/defs/basicAuth" },
-            { "$ref": "#/defs/tokenAuth" }
+            { "$ref": "#/$defs/clientCredentials" },
+            { "$ref": "#/$defs/basicAuth" },
+            { "$ref": "#/$defs/tokenAuth" }
           ]
         }
       ]
@@ -185,6 +185,11 @@
     "general": {
       "type": "object",
       "properties": {
+        "associatedServer": {
+          "type": "string",
+          "description": "The server associated with the client.",
+          "format": "uri"
+        }
       }
     },
     "clientCredentials": {
@@ -209,9 +214,14 @@
           },
           "minItems": 0,
           "uniqueItems": true
+        },
+        "associatedServer": {
+          "type": "string",
+          "format": "uri"
         }
       },
-      "required": ["clientId", "clientSecretKey"]
+      "required": ["clientId", "clientSecretKey", "associatedServer", "scopes"],
+      "additionalProperties": false
     },
     "basicAuth": {
       "type": "object",

@@ -4,8 +4,10 @@ from PyQt6.QtCore import QModelIndex, Qt, QAbstractItemModel
 from PyQt6.QtWidgets import QWidget, QAbstractItemView, QLineEdit, QLabel, QHBoxLayout
 
 from api_viewer.central_widget.core.central_child import _unwrap_model
+from api_viewer.log.decorator import log_method_calls
 
 
+@log_method_calls()
 class SearchBar(QWidget):
     """
     A search widget with previous/next buttons that walks the

@@ -3,15 +3,15 @@ import json
 import logging
 import os
 from pathlib import Path
+from jsonref import JsonRef
 
 from dotenv import load_dotenv, find_dotenv
 from time import sleep
 
-import jsonschema
+import jsonschema_rs
 import yaml
 
 load_dotenv(find_dotenv())
-print(os.environ)
 
 from api_viewer.api.client_registry import ClientRegistry
 from api_viewer.api.protocol import Protocol
@@ -97,7 +97,7 @@ def load_clients():
           open("config/clients-schema.json", "r", encoding="utf-8") as schema_file):
         clients = json.load(clients_file)
         schema = json.load(schema_file)
-        jsonschema.validate(clients, schema)
+        jsonschema_rs.validate(clients, schema)
 
     for client in clients.get("clients", []):
         client_registry.register(client["name"],client)

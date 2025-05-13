@@ -1,12 +1,12 @@
 import logging
 
 from PyQt6.QtCore import Qt, QThreadPool
-from PyQt6.QtWidgets import QWidget, QHBoxLayout, QSlider, QSplitter, QTabWidget
+from PyQt6.QtWidgets import QWidget, QHBoxLayout, QSplitter, QTabWidget
 
 from api_viewer.api import load_apis, load_clients
 from api_viewer.central_widget.history_widget import HistoryWidget
 from api_viewer.constants import NO_MARGIN
-from api_viewer.central_widget.config_widget import ConfigWidget
+from api_viewer.central_widget.config_widget.widget import ConfigWidget
 from api_viewer.central_widget.request_widget import RequestWidget
 from api_viewer.central_widget.response_widget import ResponseWidget
 from api_viewer.emitter import signal_emitter
@@ -23,16 +23,6 @@ class CentralWidget(QWidget):
         self._setup_ui()
         self._load_data()
         signal_emitter.uiLoaded.emit()
-
-    def _load_data(self):
-        self.api_loader_thread = WorkerThread(
-            func=load_apis
-        )
-        QThreadPool.globalInstance().start(self.api_loader_thread)
-        self.client_loader_thread = WorkerThread(
-            func=load_clients
-        )
-        QThreadPool.globalInstance().start(self.client_loader_thread)
 
     def _setup_ui(self):
         # Set up the main layout (Vertical)
@@ -54,6 +44,16 @@ class CentralWidget(QWidget):
         splitter_widget.setStretchFactor(2,4)
 
         self.setLayout(main_layout)
+
+    def _load_data(self):
+        self.api_loader_thread = WorkerThread(
+            func=load_apis
+        )
+        QThreadPool.globalInstance().start(self.api_loader_thread)
+        self.client_loader_thread = WorkerThread(
+            func=load_clients
+        )
+        QThreadPool.globalInstance().start(self.client_loader_thread)
 
     def _setup_conf_section(self, main_layout):
         # Create the combo boxes and add them to the layout

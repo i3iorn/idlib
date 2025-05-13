@@ -2,8 +2,10 @@ from PyQt6.QtCore import QSortFilterProxyModel, Qt, QAbstractItemModel
 from PyQt6.QtWidgets import QLineEdit, QAbstractItemView
 
 from api_viewer.central_widget.core.central_child import _unwrap_model
+from api_viewer.log.decorator import log_method_calls
 
 
+@log_method_calls()
 class FilterBar(QLineEdit):
     """
     A line edit that filters rows in any QAbstractItemView via

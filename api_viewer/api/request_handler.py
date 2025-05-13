@@ -6,6 +6,7 @@ import httpx
 from api_essentials import APIFactory, OAuth2Auth, TokenAuth, TRUST_UNDEFINED_PARAMETERS, ClientCredentials
 from api_essentials.response import Response
 
+from api_viewer.log.decorator import log_method_calls
 from api_viewer.storage import RequestResponseStorage
 
 logger = logging.getLogger(__name__)
@@ -17,7 +18,7 @@ auth_map = {
     "TokenAuth": TokenAuth,
 }
 
-
+@log_method_calls()
 class APIRequestHandler:
     def __init__(self, secrets_manager, signals):
         self.secrets_manager = secrets_manager
@@ -26,33 +27,25 @@ class APIRequestHandler:
 
     async def call(self, spec, endpoint_path, client_spec, body, verify=False):
         auth_class = auth_map.get(client_spec.get("authType", "OAuth2Auth"))
+        client_auth_info = client_spec.get("auth")
+
         factory_options = {
             "openapi_spec": spec,
-            "auth": auth_class(client_spec.get("associatedServer")),
+            "auth": auth_class(client_auth_info.get("associatedServer")),
             "verify": verify
         }
-        if client_spec.get("environment") == "sandbox":
+        if client_spec["host"] == "api.bisnode.com" and client_spec.get("environment") == "sandbox":
             factory_options["host_prefix"] = "sandbox-"
 
         my_api = APIFactory.from_openapi(**factory_options)
 
-        logger.debug(f"API created: {my_api}")
-        logger.debug(f"Endpoint path: {endpoint_path}")
-        logger.debug(f"Client spec: {client_spec}")
-        logger.debug(f"Client ID: {client_spec.get('clientId')}")
-        logger.debug(f"Client secret key: {client_spec.get('clientSecretKey')}")
-        logger.debug(f"Scopes: {client_spec.get('scopes', [])}")
-        logger.debug(f"Body: {body}")
-
-        client_auth_info = client_spec.get("auth")
-
         if "clientId" in client_auth_info and "clientSecretKey" in client_auth_info:
-            secret = self.secrets_manager.get_secret(client_spec["clientSecretKey"])
+            secret = self.secrets_manager.get_secret(client_auth_info.pop("clientSecretKey"))
             credentials = ClientCredentials(
-                client_id=client_auth_info.get("clientId"),
-                client_secret=secret,
-                scopes=client_auth_info.get("scopes", [])
+                client_secret=secret.get("value"),
+                **client_auth_info
             )
+
         elif "token" in client_auth_info:
             secret = self.secrets_manager.get_secret(client_auth_info["token"])
             credentials = TokenAuth(

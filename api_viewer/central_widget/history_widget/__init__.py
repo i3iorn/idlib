@@ -3,9 +3,11 @@ from PyQt6.QtGui import QStandardItemModel
 from PyQt6.QtWidgets import QListView, QTableView
 
 from api_viewer.central_widget.core.central_child import CentralChildWidget
+from api_viewer.log.decorator import log_method_calls
 from api_viewer.storage import RequestResponseStorage
 
 
+@log_method_calls()
 class HistoryWidget(CentralChildWidget):
     def _setup_ui(self):
         # Create the list view

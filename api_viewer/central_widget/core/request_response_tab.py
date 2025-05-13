@@ -7,10 +7,12 @@ from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QSizePolicy, QTabWidge
 from PyQt6_JsonTextEdit import QJsonTreeView, QJsonModel
 
 from api_viewer.central_widget.core.view_tab import ViewTab
+from api_viewer.log.decorator import log_method_calls
 
 logger = logging.getLogger(__name__)
 
 
+@log_method_calls()
 class RequestResponseViewTabs(QWidget):
     """
     Main composite widget with Raw, Pretty, Tree, and Paths tabs.

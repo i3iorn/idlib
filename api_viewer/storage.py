@@ -3,6 +3,10 @@ import threading
 from pathlib import Path
 from typing import Any, Dict, List
 
+from api_viewer.log.decorator import log_method_calls
+
+
+@log_method_calls()
 class RequestResponseStorage:
     def __init__(self, db_path: str = "requests.db"):
         db_path = Path(db_path)

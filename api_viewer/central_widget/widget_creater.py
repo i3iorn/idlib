@@ -3,6 +3,7 @@ from PyQt6.QtWidgets import QSizePolicy, QVBoxLayout, QHBoxLayout, QLabel, QComb
 from api_viewer.constants import NO_MARGIN
 
 
+@log_method_calls()
 class WidgetCreator:
     @classmethod
     def create_widget(cls, widget_class, parent=None):
