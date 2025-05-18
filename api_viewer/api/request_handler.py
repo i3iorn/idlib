@@ -3,7 +3,7 @@ import logging
 from typing import Union
 
 import httpx
-from api_essentials import APIFactory, OAuth2Auth, TokenAuth, TRUST_UNDEFINED_PARAMETERS, ClientCredentials
+from api_essentials import APIFactory, OAuth2Flow, TokenFlow, TRUST_UNDEFINED_PARAMETERS, ClientCredentials
 from api_essentials.response import Response
 
 from api_viewer.log.decorator import log_method_calls
@@ -13,9 +13,9 @@ logger = logging.getLogger(__name__)
 
 
 auth_map = {
-    "OAuth2Auth": OAuth2Auth,
-    "BasicAuth": httpx.BasicAuth,
-    "TokenAuth": TokenAuth,
+    "OAuth2Flow": OAuth2Flow,
+    "BasicFlow": httpx.BasicAuth,
+    "TokenFlow": TokenFlow,
 }
 
 @log_method_calls()
@@ -26,7 +26,7 @@ class APIRequestHandler:
         self.storage = RequestResponseStorage()
 
     async def call(self, spec, endpoint_path, client_spec, body, verify=False):
-        auth_class = auth_map.get(client_spec.get("authType", "OAuth2Auth"))
+        auth_class = auth_map.get(client_spec.get("authType", "OAuth2Flow"))
         client_auth_info = client_spec.get("auth")
 
         factory_options = {
@@ -48,7 +48,7 @@ class APIRequestHandler:
 
         elif "token" in client_auth_info:
             secret = self.secrets_manager.get_secret(client_auth_info["token"])
-            credentials = TokenAuth(
+            credentials = TokenFlow(
                 token=secret
             )
         else:
