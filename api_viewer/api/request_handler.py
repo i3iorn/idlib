@@ -13,9 +13,9 @@ logger = logging.getLogger(__name__)
 
 
 auth_map = {
-    "OAuth2Flow": OAuth2Flow,
-    "BasicFlow": httpx.BasicAuth,
-    "TokenFlow": TokenFlow,
+    "OAuth2Auth": OAuth2Flow,
+    "BasicAuth": httpx.BasicAuth,
+    "TokenAuth": TokenFlow,
 }
 
 @log_method_calls()
@@ -26,8 +26,8 @@ class APIRequestHandler:
         self.storage = RequestResponseStorage()
 
     async def call(self, spec, endpoint_path, client_spec, body, verify=False):
-        auth_class = auth_map.get(client_spec.get("authType", "OAuth2Flow"))
-        client_auth_info = client_spec.get("auth")
+        auth_class = auth_map.get(client_spec.get("auth").pop("type", "OAuth2Auth"))
+        client_auth_info = client_spec.pop("auth")
 
         factory_options = {
             "openapi_spec": spec,
