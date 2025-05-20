@@ -1,24 +1,34 @@
-import logging
+import asyncio
 import sys
-from threading import Lock
-
 from PyQt6.QtWidgets import QApplication
+from qasync import QEventLoop
 
-from constants import STARTUP_WINDOW_TITLE
-from log import setup_logging
-from emitter import SignalEmitter
-from window import MainWindow
-from api import *
+app = QApplication(sys.argv)
+loop = QEventLoop(app)
+asyncio.set_event_loop(loop)
 
-signal_emitter = SignalEmitter()
-setup_logging(signal_emitter)
+def launch_window():
+    from api_viewer.log.setup import setup_logging
+    from api_viewer.emitter import signal_emitter
+    from api_viewer.window import MainWindow
 
-application = QApplication(
-    sys.argv
-)
-application.setApplicationName(STARTUP_WINDOW_TITLE)
+    setup_logging(signal_emitter)
 
-application.setStyle("Fusion")
-window = MainWindow(signal_emitter)
-window.show()
-sys.exit(application.exec())
+    application = QApplication(
+        sys.argv
+    )
+
+    from api_viewer.constants import STARTUP_WINDOW_TITLE
+    application.setApplicationName(STARTUP_WINDOW_TITLE)
+
+    application.setStyle("Fusion")
+    main_window = MainWindow(signal_emitter)
+    with loop:
+        main_window.show()
+        loop.run_forever()
+
+    sys.exit(application.exec())
+
+
+if __name__ == "__main__":
+    launch_window()

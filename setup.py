@@ -1,7 +1,7 @@
 import setuptools
 
 setuptools.setup(
-    name="API_Viewer",
+    name="api-viewer",
     version="0.1.0",
     author="Björn",
     author_email="bjorn@schrammel.dev",
@@ -9,9 +9,6 @@ setuptools.setup(
     long_description_content_type="text/markdown",
     url="",
     packages=setuptools.find_packages(),
-    install_requires=[
-        "PyQt6~=6.8.1"
-    ],
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",

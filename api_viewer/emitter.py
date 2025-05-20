@@ -1,28 +1,31 @@
 from PyQt6.QtCore import pyqtSignal, QObject
 
+from api_viewer.worker_result import WorkerResult
+
 
 class SignalEmitter(QObject):
     """
-    A class that emits signals for various events.
+    Emitter of application-wide signals.  Just a plain QObject subclass.
     """
 
-    # Signal for updating the status bar message (message, timeout)
-    status_bar_message  = pyqtSignal(str, int)
+    statusBarMessage      = pyqtSignal(str, int)
+    error                 = pyqtSignal(str, str, str)
+    themeChanged          = pyqtSignal(str, str)
+    log                   = pyqtSignal(str, str)
+    apiAvailable          = pyqtSignal(str)
+    requestBodyChanged    = pyqtSignal(str)
+    reloadSpecifications  = pyqtSignal()
+    uiLoaded              = pyqtSignal()
+    dynamicControlUpdated = pyqtSignal()
+    loadRequestId         = pyqtSignal(int)
+    reloadBodyFromHistory = pyqtSignal(int)
 
-    # Signal for when an error occurs ( exeption class, error message , json formatted extra data)
-    error               = pyqtSignal(str, str, str)
+    jobStarted            = pyqtSignal(str)
+    jobFinished           = pyqtSignal(str)
+    jobResult             = pyqtSignal(str, WorkerResult)
+    jobProgress           = pyqtSignal(str, int)
+    jobError              = pyqtSignal(str, tuple)
 
-    # Signal for when a request is made (request method, request url, request body, request headers)
-    request             = pyqtSignal(str, str, str, str)
 
-    # Signal for when a response is received (response status code, response body, response headers)
-    response            = pyqtSignal(int, str, str)
-
-    # Signal for theme change (theme name, full stylesheet)
-    theme_changed       = pyqtSignal(str, str)
-
-    # Log signal (log level, log message)
-    log                 = pyqtSignal(str, str)
-
-    # Signal for when an api is made available ( api name )
-    api_available       = pyqtSignal(str)
+# the one and only global instance:
+signal_emitter = SignalEmitter()

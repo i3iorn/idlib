@@ -1,7 +1,16 @@
-from PyQt6.QtWidgets import QMainWindow, QVBoxLayout
+import logging
+import sys
 
-from src.central_widget import CentralWidget
-from constants import *
+from PyQt6.QtCore import QRunnable, QThreadPool
+from PyQt6.QtWidgets import QMainWindow, QMessageBox, QApplication
+
+from api_viewer.api import load_apis, load_clients, ClientRegistry
+from api_viewer.emitter import signal_emitter
+from api_viewer.central_widget import CentralWidget
+from api_viewer.runner import WorkerThread
+from constants import STARTUP_WINDOW_X, STARTUP_WINDOW_Y, STARTUP_WINDOW_WIDTH, STARTUP_WINDOW_HEIGHT
+
+logger = logging.getLogger(__name__)
 
 
 class MainWindow(QMainWindow):
@@ -9,22 +18,20 @@ class MainWindow(QMainWindow):
         super().__init__(parent)
         self.signal_emitter = signal_emitter
         self.setWindowTitle("API Viewer")
-        self.setGeometry(STARTUP_WINDOW_X, STARTUP_WINDOW_Y, STARTUP_WINDOW_WIDTH, STARTUP_WINDOW_HEIGHT)
-        self.setMinimumSize(STARTUP_WINDOW_WIDTH, STARTUP_WINDOW_HEIGHT)
+        height = min(STARTUP_WINDOW_HEIGHT, QApplication.primaryScreen().size().height() - 2*STARTUP_WINDOW_Y)
+        width = min(STARTUP_WINDOW_WIDTH, QApplication.primaryScreen().size().width() - 2*STARTUP_WINDOW_X)
 
+        self.setGeometry(STARTUP_WINDOW_X, STARTUP_WINDOW_Y, width, height)
+        self.setMinimumSize(width, height)
+
+        sys.excepthook = self.custom_sys_exception_hook
         self._setup_ui()
-        self._load_api_data()
 
     def _setup_ui(self):
         self._setup_menu()
         self._setup_central_widget()
         self._setup_status_bar()
-
-    def _load_api_data(self):
-        # Load API data here
-        # For example, you can load the API data from a file or an API endpoint
-        # and then update the central widget with the loaded data.
-        pass
+        self._connect_signals()
 
     def _setup_menu(self):
         # Create a menu bar
@@ -37,6 +44,13 @@ class MainWindow(QMainWindow):
         exit_action = file_menu.addAction("Exit")
         exit_action.triggered.connect(self.close)
 
+        # Create specification menu
+        spec_menu = menu_bar.addMenu("Specification")
+
+        # Create actions for the specification menu
+        load_action = spec_menu.addAction("Reload Specifications")
+        load_action.triggered.connect(signal_emitter.reloadSpecifications.emit)
+
     def _setup_central_widget(self):
         central_widget = CentralWidget(self)
         self.setCentralWidget(central_widget)
@@ -45,3 +59,39 @@ class MainWindow(QMainWindow):
         # Create a status bar
         status_bar = self.statusBar()
         status_bar.showMessage("Ready")
+
+    def _connect_signals(self):
+        # Connect signals to methods
+        signal_emitter.jobError.connect(self._handle_job_error)
+
+    def _handle_job_error(self, job_id: str, exception_info: tuple):
+        """
+        Handle job errors by displaying a message box.
+        """
+        logger.error(f"Job error: {job_id}")
+        exception, tb = exception_info
+        logger.error(f"Exception: {exception}")
+        logger.error(f"Traceback: {tb}")
+        msg_box = QMessageBox(
+            QMessageBox.Icon.Critical,
+            "Job Error",
+            f"An error occurred in job {job_id}:\n{exception}",
+            QMessageBox.StandardButton.Ok,
+            self
+        )
+        msg_box.exec()
+
+    def custom_sys_exception_hook(self, type, value, traceback):
+        """
+        Custom exception hook to handle uncaught exceptions.
+        """
+        # Log the exception or show a message box
+        logger.debug(f"Uncaught exception: {value}", exc_info=(type, value, traceback))
+        msg_box = QMessageBox(
+            QMessageBox.Icon.Critical,
+            "Uncaught Exception",
+            f"An uncaught exception occurred:\n{value}",
+            QMessageBox.StandardButton.Ok,
+            self
+        )
+        msg_box.exec()
