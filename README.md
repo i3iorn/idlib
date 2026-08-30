@@ -26,5 +26,6 @@ overridable via an environment variable of the same name.
 
 ```bash
 pip install -e ".[dev]"
+ruff check .
 pytest
 ```

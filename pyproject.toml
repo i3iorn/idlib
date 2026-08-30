@@ -9,17 +9,27 @@ description = "Small library for generating and managing unique identifiers"
 readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "MIT" }
+authors = [{ name = "i3iorn" }]
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
 ]
 
+[project.urls]
+Homepage = "https://github.com/i3iorn/idlib"
+Repository = "https://github.com/i3iorn/idlib"
+Issues = "https://github.com/i3iorn/idlib/issues"
+
 [project.optional-dependencies]
-dev = ["pytest>=7"]
+dev = ["pytest>=7", "ruff>=0.6"]
 
 [tool.setuptools.packages.find]
 include = ["idlib*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py39"
