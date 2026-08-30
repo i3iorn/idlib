@@ -20,6 +20,12 @@ def test_generate_string_types_respect_length(id_type):
     assert len(value) == MIN_ID_LENGTH
 
 
+def test_generate_hex_is_lowercase():
+    value = IdGenerator.generate_id(IdType.HEX, MIN_ID_LENGTH)
+    assert value == value.lower()
+    assert all(c in "0123456789abcdef" for c in value)
+
+
 def test_generate_bytes_type():
     value = IdGenerator.generate_id(IdType.BYTES, MIN_ID_LENGTH)
     assert isinstance(value, bytes)
@@ -45,3 +51,23 @@ def test_generate_rejects_non_int_length():
 def test_generate_rejects_invalid_type():
     with pytest.raises(exceptions.InvalidIDTypeException):
         IdGenerator.generate_id("not-a-type", MIN_ID_LENGTH)
+
+
+def test_invalid_id_length_exception_message():
+    exc = exceptions.InvalidIDLengthException(5, MIN_ID_LENGTH, MAX_ID_LENGTH)
+    assert str(exc) == f"Invalid ID length: 5. Expected between {MIN_ID_LENGTH} and {MAX_ID_LENGTH}."
+    assert exc.length == 5
+    assert exc.min_length == MIN_ID_LENGTH
+    assert exc.max_length == MAX_ID_LENGTH
+
+
+def test_invalid_id_type_exception_message():
+    exc = exceptions.InvalidIDTypeException(IdType, "not-a-type")
+    assert str(exc) == f"Invalid ID type: not-a-type. Expected {IdType}."
+    assert exc.expected_type is IdType
+    assert exc.actual_type == "not-a-type"
+
+
+def test_id_already_set_exception_message():
+    exc = exceptions.IdAlreadySetException()
+    assert str(exc) == "Id value has already been set and cannot be reassigned."

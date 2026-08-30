@@ -20,3 +20,10 @@ class InvalidIDTypeException(Exception):
         super().__init__(f"Invalid ID type: {actual_type}. Expected {expected_type}.")
         self.expected_type = expected_type
         self.actual_type = actual_type
+
+
+class IdAlreadySetException(Exception):
+    """Exception raised when trying to change an Id's value after it has already been set."""
+
+    def __init__(self):
+        super().__init__("Id value has already been set and cannot be reassigned.")
