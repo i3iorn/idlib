@@ -15,9 +15,11 @@ class IdGenerator:
         Attributes:
         -----------
         id_type: IdType
-            The type of ID to generate (UUID, STR, INT, HEX, BASE64, BYTES).
+            The type of ID to generate (UUID, SNOWFLAKE, STR, INT, HEX,
+            BASE64, BYTES).
         __n: int
-            The length of the ID to generate (not applicable for UUID).
+            The length of the ID to generate (not applicable for UUID or
+            SNOWFLAKE).
 
         Returns:
         --------
@@ -37,7 +39,9 @@ class IdGenerator:
         if id_type == IdType.UUID:
             return id_type.value()
 
-        if not isinstance(__n, int) or not (MIN_ID_LENGTH <= __n <= MAX_ID_LENGTH):
+        if id_type != IdType.SNOWFLAKE and (
+            not isinstance(__n, int) or not (MIN_ID_LENGTH <= __n <= MAX_ID_LENGTH)
+        ):
             raise exceptions.InvalidIDLengthException(__n, MIN_ID_LENGTH, MAX_ID_LENGTH)
 
         return id_type.value(__n)

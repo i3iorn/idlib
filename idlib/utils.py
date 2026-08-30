@@ -4,6 +4,8 @@ import string
 import uuid
 from enum import Enum
 
+from idlib.snowflake import default_snowflake_generator
+
 
 def _generate_int(n: int) -> int:
     """Return an int with exactly n significant digits (no leading zero)."""
@@ -20,9 +22,12 @@ class IdType(Enum):
 
     Each member's value is a callable (wrapped in functools.partial so Enum
     treats it as a value rather than a method) that generates the id. UUID
-    takes no arguments; the others take the desired length ``n``.
+    and SNOWFLAKE ignore the requested length; the others take it as ``n``.
     """
     UUID = functools.partial(uuid.uuid4)
+    #: Guaranteed unique across threads and processes (see idlib.snowflake);
+    #: unlike every other member, this is not random.
+    SNOWFLAKE = functools.partial(lambda n: default_snowflake_generator.next_id())
     STR = functools.partial(lambda n: "".join(random.choices(string.ascii_letters, k=n)))
     INT = functools.partial(_generate_int)
     HEX = functools.partial(lambda n: "".join(random.choices("0123456789abcdef", k=n)))

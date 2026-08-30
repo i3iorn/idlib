@@ -13,6 +13,17 @@ def test_generate_uuid_ignores_length():
     assert isinstance(value, uuid.UUID)
 
 
+def test_generate_snowflake_ignores_length():
+    value = IdGenerator.generate_id(IdType.SNOWFLAKE, 999999)
+    assert isinstance(value, int)
+    assert value >= 0
+
+
+def test_generate_snowflake_is_unique_across_calls():
+    values = [IdGenerator.generate_id(IdType.SNOWFLAKE) for _ in range(100)]
+    assert len(set(values)) == len(values)
+
+
 @pytest.mark.parametrize("id_type", [IdType.STR, IdType.HEX, IdType.BASE64])
 def test_generate_string_types_respect_length(id_type):
     value = IdGenerator.generate_id(id_type, MIN_ID_LENGTH)
