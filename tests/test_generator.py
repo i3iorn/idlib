@@ -35,6 +35,14 @@ def test_generate_bytes_type():
 def test_generate_int_type():
     value = IdGenerator.generate_id(IdType.INT, MIN_ID_LENGTH)
     assert isinstance(value, int)
+    assert len(str(value)) == MIN_ID_LENGTH
+
+
+def test_generate_int_type_never_has_leading_zero():
+    for _ in range(200):
+        value = IdGenerator.generate_id(IdType.INT, MIN_ID_LENGTH)
+        assert len(str(value)) == MIN_ID_LENGTH
+        assert str(value)[0] != "0"
 
 
 @pytest.mark.parametrize("length", [MIN_ID_LENGTH - 1, MAX_ID_LENGTH + 1])
