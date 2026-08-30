@@ -8,21 +8,20 @@ class IdGenerator:
     Class to generate IDs of various types.
     """
     @staticmethod
-    def generate_id(id_type: IdType, __n: int = 32) -> str:
+    def generate_id(id_type: IdType, __n: int = 32):
         """
         Generate an ID of the specified type.
 
         Attributes:
         -----------
         id_type: IdType
-            The type of ID to generate (UUID, STR, INT, FLOAT).
+            The type of ID to generate (UUID, STR, INT, HEX, BASE64, BYTES).
         __n: int
-            The length of the ID to generate (for STR, INT, and FLOAT types).
+            The length of the ID to generate (not applicable for UUID).
 
         Returns:
         --------
-        str
-            The generated ID.
+        The generated ID.
 
         Raises:
         -------
@@ -32,11 +31,13 @@ class IdGenerator:
         InvalidIDTypeException
             If the ID type is not valid.
         """
-        if id_type not in IdType:
-            raise exceptions.InvalidIDTypeException(id_type, IdType)
+        if not isinstance(id_type, IdType):
+            raise exceptions.InvalidIDTypeException(IdType, id_type)
 
-        if id_type != IdType.UUID:
-            if not isinstance(__n, int) or MAX_ID_LENGTH < __n < MIN_ID_LENGTH:
-                raise exceptions.InvalidIDLengthException(__n, MIN_ID_LENGTH, MAX_ID_LENGTH)
+        if id_type == IdType.UUID:
+            return id_type.value()
 
-        return id_type.value()
+        if not isinstance(__n, int) or not (MIN_ID_LENGTH <= __n <= MAX_ID_LENGTH):
+            raise exceptions.InvalidIDLengthException(__n, MIN_ID_LENGTH, MAX_ID_LENGTH)
+
+        return id_type.value(__n)
