@@ -5,6 +5,15 @@ import uuid
 from enum import Enum
 
 
+def _generate_int(n: int) -> int:
+    """Return an int with exactly n significant digits (no leading zero)."""
+    if n <= 1:
+        return int(random.choice(string.digits))
+    first_digit = random.choice("123456789")
+    rest = "".join(random.choices(string.digits, k=n - 1))
+    return int(first_digit + rest)
+
+
 class IdType(Enum):
     """
     Enum to represent the ID types.
@@ -15,10 +24,7 @@ class IdType(Enum):
     """
     UUID = functools.partial(uuid.uuid4)
     STR = functools.partial(lambda n: "".join(random.choices(string.ascii_letters, k=n)))
-    #: Built from n random decimal digits and cast to int, so a leading "0"
-    #: silently shortens the effective numeric range (e.g. "0123" -> 123);
-    #: the requested length bounds the digit string, not the resulting int.
-    INT = functools.partial(lambda n: int("".join(random.choices(string.digits, k=n))))
+    INT = functools.partial(_generate_int)
     HEX = functools.partial(lambda n: "".join(random.choices("0123456789abcdef", k=n)))
     BASE64 = functools.partial(lambda n: "".join(random.choices(string.ascii_letters + string.digits + "+/", k=n)))
     #: Opaque ASCII-derived bytes (letters/digits encoded as utf-8), not raw

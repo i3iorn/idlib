@@ -32,7 +32,7 @@ Supported `IdType` values, and what each one guarantees about its output:
 |----------|-----------------------------------------------|---------------------------------------------------------------------|
 | `UUID`   | `uuid.UUID`                                   | Length argument is ignored.                                        |
 | `STR`    | `str` of exactly `n` ASCII letters            |                                                                      |
-| `INT`    | `int`                                          | Built from `n` random digits; a leading `0` shortens the effective numeric range, so the result isn't guaranteed to have `n` significant digits. |
+| `INT`    | `int` with exactly `n` significant digits     | The first digit is chosen from 1-9 so the value never has a leading zero. |
 | `HEX`    | `str` of exactly `n` lowercase hex digits (`0-9a-f`) |                                                               |
 | `BASE64` | `str` of exactly `n` base64-alphabet characters |                                                                     |
 | `BYTES`  | `bytes` of exactly `n` bytes                  | Opaque ASCII-derived bytes, not raw random bytes — don't use where full byte-value entropy is required. |
