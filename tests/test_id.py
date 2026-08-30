@@ -45,6 +45,13 @@ def test_two_instances_get_independent_ids():
     assert a.id != b.id
 
 
+def test_snowflake_id_ignores_length_and_is_unique():
+    a = Id(IdType.SNOWFLAKE)
+    b = Id(IdType.SNOWFLAKE)
+    assert isinstance(a.id, int)
+    assert a.id != b.id
+
+
 def test_str_and_repr_reflect_id_value():
     instance = Id(IdType.HEX, id_length=20)
     instance.id = "custom-id"
