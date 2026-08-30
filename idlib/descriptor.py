@@ -1,9 +1,13 @@
+from idlib.exceptions import IdAlreadySetException
 from idlib.generator import IdGenerator
 
 
 class IdDescriptor:
     """
     Descriptor that lazily generates and caches an ID on first access.
+
+    Once a value has been generated or explicitly set, it is immutable:
+    a further assignment raises IdAlreadySetException.
     """
     def __set_name__(self, owner, name):
         self._name = f"_{name}_value"
@@ -23,4 +27,6 @@ class IdDescriptor:
         return getattr(instance, self._name)
 
     def _set_id(self, instance, value):
+        if getattr(instance, self._name, None) is not None:
+            raise IdAlreadySetException()
         setattr(instance, self._name, value)
